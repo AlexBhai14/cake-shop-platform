@@ -1,0 +1,45 @@
+# ===== Dependencies =====
+node_modules/
+
+# ===== Build output =====
+dist/
+build/
+.next/
+*.tsbuildinfo
+
+# ===== Environment files and secrets =====
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+secrets/
+*.secret.yaml
+*-secret.yaml
+
+# ===== Logs =====
+logs/
+*.log
+npm-debug.log*
+
+# ===== Test and coverage output =====
+coverage/
+.nyc_output/
+
+# ===== Local data (Docker volumes, uploads) =====
+mysql-data/
+redis-data/
+rabbitmq-data/
+uploads/
+
+# ===== OS files =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== Editor files =====
+.idea/
+*.swp
+.vscode/*
+!.vscode/extensions.json
