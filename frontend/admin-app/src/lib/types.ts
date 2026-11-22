@@ -45,6 +45,7 @@ export interface AdminOrder {
   cancelReason: string | null;
   paymentId: string | null;
   createdAt: string;
+  updatedAt?: string;
   items: OrderItem[];
   history?: HistoryEntry[];
 }

@@ -22,6 +22,7 @@ interface StoredItem {
 // Pure function: combines stored cart lines with CURRENT product data.
 export function buildCartView(items: StoredItem[], variants: Array<ProductVariant | null>) {
   let subtotalMinor = 0;
+  let savingsMinor = 0; // display only: how much the customer saves compared with the crossed-out prices
   let hasUnavailableItems = false;
 
   const lines = items.map((item, index) => {
@@ -31,6 +32,10 @@ export function buildCartView(items: StoredItem[], variants: Array<ProductVarian
     const unitMinor = v ? toMinor(v.price) : 0;
     const lineMinor = unitMinor * item.quantity;
     if (available) subtotalMinor += lineMinor;
+    const mrpMinor = v?.mrp ? toMinor(v.mrp) : 0;
+    const hasDiscount = available && mrpMinor > unitMinor;
+    const lineMrpMinor = hasDiscount ? mrpMinor * item.quantity : null;
+    if (hasDiscount) savingsMinor += lineMrpMinor! - lineMinor;
     return {
       id: item.id,
       variantId: item.variantId,
@@ -42,11 +47,13 @@ export function buildCartView(items: StoredItem[], variants: Array<ProductVarian
       eggless: v?.eggless ?? null,
       unitPrice: fromMinor(unitMinor),
       lineTotal: fromMinor(lineMinor),
+      unitMrp: hasDiscount ? fromMinor(mrpMinor) : null,
+      lineMrp: lineMrpMinor === null ? null : fromMinor(lineMrpMinor),
       available,
     };
   });
 
-  return { items: lines, subtotal: fromMinor(subtotalMinor), currency: 'INR', hasUnavailableItems };
+  return { items: lines, subtotal: fromMinor(subtotalMinor), savings: fromMinor(savingsMinor), currency: 'INR', hasUnavailableItems };
 }
 
 @Injectable()

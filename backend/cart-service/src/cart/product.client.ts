@@ -9,6 +9,7 @@ export interface ProductVariant {
   weightGrams: number;
   eggless: boolean;
   price: string;
+  mrp?: string | null; // display only (crossed-out price), never used for money
   available: boolean;
 }
 

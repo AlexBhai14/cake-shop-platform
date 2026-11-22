@@ -1,5 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useOrderAlerts } from '../hooks/useOrderAlerts';
+import { OrderAlerts } from './OrderAlerts';
 
 const LINKS: Array<[string, string]> = [
   ['/', 'Dashboard'],
@@ -15,6 +17,7 @@ const LINKS: Array<[string, string]> = [
 export function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { alerts, dismiss, dismissAll } = useOrderAlerts();
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       <aside className="bg-slate-900 p-4 text-slate-200 md:w-60 md:shrink-0">
@@ -40,6 +43,7 @@ export function Layout() {
           </button>
         </div>
       </aside>
+      <OrderAlerts alerts={alerts} onDismiss={dismiss} onDismissAll={dismissAll} />
       <main className="min-w-0 flex-1 p-4 md:p-8">
         <Outlet />
       </main>

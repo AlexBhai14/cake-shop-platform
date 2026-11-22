@@ -104,14 +104,22 @@ describe('CakesService', () => {
       expect((await service.listAdmin()).items[0].variants[0].mrp).toBe('100.00');
     });
 
-    it('getVariant (used by cart and order) exposes ONLY the real price, never the mrp', async () => {
+    it('getVariant keeps price as the REAL price and adds mrp for display only', async () => {
       prisma.cakeVariant.findUnique.mockResolvedValue({
         id: 'v1', cakeId: 'k1', flavour: 'Choc', weightGrams: 500, eggless: false, price: '70.00',
-        isActive: true, cake: { id: 'k1', name: 'Truffle', isActive: true },
+        isActive: true, cake: { id: 'k1', name: 'Truffle', isActive: true, discountPercent: 30 },
       });
       const v: any = await service.getVariant('v1');
       expect(v.price).toBe('70.00');
-      expect(v.mrp).toBeUndefined();
+      expect(v.mrp).toBe('100.00');
+    });
+
+    it('getVariant gives mrp null when the cake has no discount', async () => {
+      prisma.cakeVariant.findUnique.mockResolvedValue({
+        id: 'v1', cakeId: 'k1', flavour: 'Choc', weightGrams: 500, eggless: false, price: '70.00',
+        isActive: true, cake: { id: 'k1', name: 'Truffle', isActive: true, discountPercent: 0 },
+      });
+      expect(((await service.getVariant('v1')) as any).mrp).toBeNull();
     });
   });
 

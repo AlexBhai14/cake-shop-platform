@@ -33,6 +33,25 @@ describe('buildCartView', () => {
     expect(view.items[1].available).toBe(false);
   });
 
+  it('adds display-only crossed-out prices and the total savings, without changing the real totals', () => {
+    const items = [{ id: 'i1', variantId: 'v1', quantity: 2, message: null }];
+    const view = buildCartView(items, [variant({ price: '70.00', mrp: '100.00' })]);
+    expect(view.items[0]).toMatchObject({ unitPrice: '70.00', lineTotal: '140.00', unitMrp: '100.00', lineMrp: '200.00' });
+    expect(view.subtotal).toBe('140.00'); // the customer pays the REAL price
+    expect(view.savings).toBe('60.00');
+  });
+
+  it('shows no savings for items without a discount or that are unavailable', () => {
+    const items = [
+      { id: 'i1', variantId: 'v1', quantity: 1, message: null },
+      { id: 'i2', variantId: 'v2', quantity: 1, message: null },
+    ];
+    const view = buildCartView(items, [variant({ mrp: null }), variant({ id: 'v2', price: '70.00', mrp: '100.00', available: false })]);
+    expect(view.savings).toBe('0.00');
+    expect(view.items[0].unitMrp).toBeNull();
+    expect(view.items[1].lineMrp).toBeNull();
+  });
+
   it('marks items whose variant no longer exists as unavailable', () => {
     const view = buildCartView([{ id: 'i1', variantId: 'gone', quantity: 1, message: null }], [null]);
     expect(view.items[0].available).toBe(false);

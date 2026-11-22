@@ -73,3 +73,14 @@ export function PriceTag({ price, mrp, discountPercent, size = 'md' }: { price: 
     </span>
   );
 }
+
+// "You saved INR X" line for the cart and checkout. Shows nothing when there is no saving.
+export function SavingsLine({ savings }: { savings?: string }) {
+  if (!savings || Number(savings) <= 0) return null;
+  return (
+    <div className="flex justify-between rounded-lg bg-green-50 px-3 py-2 text-sm font-semibold text-green-700">
+      <span>You saved</span>
+      <span>{formatINR(savings)}</span>
+    </div>
+  );
+}

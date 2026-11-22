@@ -7,7 +7,7 @@ import {
   UpdateVariantDto,
   VariantDto,
 } from './dto/cake.dto';
-import { withMrp } from './pricing.util';
+import { computeMrp, withMrp } from './pricing.util';
 import { isUniqueViolation, slugify } from './slug.util';
 
 @Injectable()
@@ -73,7 +73,7 @@ export class CakesService {
   async getVariant(variantId: string) {
     const variant = await this.prisma.cakeVariant.findUnique({
       where: { id: variantId },
-      include: { cake: { select: { id: true, name: true, isActive: true } } },
+      include: { cake: { select: { id: true, name: true, isActive: true, discountPercent: true } } },
     });
     if (!variant) throw new NotFoundException('Variant not found');
     return {
@@ -83,7 +83,8 @@ export class CakesService {
       flavour: variant.flavour,
       weightGrams: variant.weightGrams,
       eggless: variant.eggless,
-      price: variant.price,
+      price: variant.price, // the REAL price: carts, orders and payments use only this
+      mrp: computeMrp(variant.price, variant.cake.discountPercent), // display only (crossed-out price)
       available: variant.isActive && variant.cake.isActive,
     };
   }

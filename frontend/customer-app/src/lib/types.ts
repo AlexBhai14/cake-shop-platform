@@ -48,12 +48,15 @@ export interface CartLine {
   eggless: boolean | null;
   unitPrice: string;
   lineTotal: string;
+  unitMrp?: string | null;
+  lineMrp?: string | null;
   available: boolean;
 }
 
 export interface CartView {
   items: CartLine[];
   subtotal: string;
+  savings?: string;
   currency: string;
   hasUnavailableItems: boolean;
 }

@@ -1,9 +1,13 @@
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ordersApi } from '../api/endpoints';
 import { ErrorBox, Loading, PageTitle, StatusBadge } from '../components/ui';
 import { useAsync } from '../hooks/useAsync';
+import { buildActivity, timeAgo } from '../lib/activity';
 import { formatDateTime } from '../lib/dates';
 import { formatINR } from '../lib/money';
+
+const DOT = { green: 'bg-green-500', amber: 'bg-amber-500', red: 'bg-red-500', blue: 'bg-blue-500', gray: 'bg-slate-400' };
 
 function Card({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
@@ -18,6 +22,13 @@ function Card({ label, value, hint }: { label: string; value: string | number; h
 export function DashboardPage() {
   const stats = useAsync(() => ordersApi.stats(14), []);
   const recent = useAsync(() => ordersApi.list({ limit: 8 }), []);
+  const activity = useAsync(() => ordersApi.list({ limit: 20 }), []);
+  // Refresh the activity list by itself every 15 seconds.
+  useEffect(() => {
+    const t = setInterval(() => activity.reload(), 15000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (stats.loading) return <Loading />;
   if (stats.error || !stats.data) return <ErrorBox message={stats.error ?? 'No data'} onRetry={stats.reload} />;
@@ -37,6 +48,25 @@ export function DashboardPage() {
         <Card label="Delivered" value={n('DELIVERED')} />
         <Card label="Cancelled / failed" value={n('CANCELLED') + n('PAYMENT_FAILED')} />
       </div>
+
+      <section>
+        <h2 className="mb-3 text-lg font-bold">Recent activity</h2>
+        {activity.data && buildActivity(activity.data.items).length > 0 ? (
+          <ul className="card divide-y text-sm">
+            {buildActivity(activity.data.items).map((a) => (
+              <li key={a.id} className="flex items-center justify-between gap-3 py-2">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${DOT[a.tone]}`} aria-hidden />
+                  <Link to={`/orders/${a.orderId}`} className="truncate hover:underline">{a.text}</Link>
+                </span>
+                <span className="shrink-0 text-xs text-slate-500">{formatINR(a.amount)} · {timeAgo(a.at)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-slate-500">{activity.loading ? 'Loading...' : 'No activity yet.'}</p>
+        )}
+      </section>
 
       <section>
         <div className="mb-3 flex items-center justify-between">

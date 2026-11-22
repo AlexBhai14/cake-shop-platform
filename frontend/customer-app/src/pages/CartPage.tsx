@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { cartApi } from '../api/endpoints';
-import { ErrorBox, Loading, Notice, PageTitle } from '../components/ui';
+import { ErrorBox, Loading, Notice, PageTitle, SavingsLine } from '../components/ui';
 import { useCart } from '../context/CartContext';
 import { useAsync } from '../hooks/useAsync';
 import { getErrorMessage } from '../lib/api';
@@ -70,7 +70,10 @@ export function CartPage() {
                 <span className="w-6 text-center" aria-label="Quantity">{item.quantity}</span>
                 <button className="btn-outline px-3" aria-label="Increase quantity" disabled={busy === item.id || item.quantity >= 20} onClick={() => void run(item.id, () => cartApi.setQuantity(item.id, item.quantity + 1))}>+</button>
               </div>
-              <p className="w-28 text-right font-semibold">{formatINR(item.lineTotal)}</p>
+              <p className="w-28 text-right font-semibold">
+                {item.lineMrp && <span className="block text-xs font-normal text-gray-400 line-through" aria-label="Original price">{formatINR(item.lineMrp)}</span>}
+                {formatINR(item.lineTotal)}
+              </p>
               <button className="btn-danger" disabled={busy === item.id} onClick={() => void run(item.id, () => cartApi.remove(item.id))}>Remove</button>
             </li>
           ))}
@@ -79,6 +82,7 @@ export function CartPage() {
         <aside className="card h-fit space-y-4">
           <h2 className="text-lg font-bold">Summary</h2>
           <div className="flex justify-between text-sm"><span>Subtotal</span><span className="font-semibold">{formatINR(cart.subtotal)}</span></div>
+          <SavingsLine savings={cart.savings} />
           <p className="text-xs text-gray-500">Prices are checked again when you place the order.</p>
           {cart.hasUnavailableItems ? (
             <button className="btn-primary w-full" disabled>Proceed to checkout</button>

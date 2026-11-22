@@ -57,7 +57,7 @@ Create cake: `{name, description, categoryId, imageUrl?, variants:[{flavour, wei
 
 | Method and path | Purpose |
 |---|---|
-| GET `/cart` | Lines with the CURRENT price, `subtotal`, `hasUnavailableItems` |
+| GET `/cart` | Lines with the CURRENT price, `subtotal`, `hasUnavailableItems`. Display-only extras: `unitMrp`/`lineMrp` per line (crossed-out price, `null` without discount) and `savings` (total saved). The customer always pays `subtotal` (real prices) |
 | POST `/cart/items` `{variantId, quantity(1-20), message?}` | Add (adds to the quantity of an existing line, max 20) |
 | PATCH `/cart/items/:itemId` `{quantity}`, DELETE `/cart/items/:itemId`, DELETE `/cart` | Change, remove, clear |
 

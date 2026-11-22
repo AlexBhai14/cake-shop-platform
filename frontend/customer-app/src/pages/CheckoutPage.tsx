@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { cartApi, inventoryApi, ordersApi, usersApi } from '../api/endpoints';
 import { AddressForm } from '../components/AddressForm';
-import { ErrorBox, Loading, Notice, PageTitle } from '../components/ui';
+import { ErrorBox, Loading, Notice, PageTitle, SavingsLine } from '../components/ui';
 import { useCart } from '../context/CartContext';
 import { useAsync } from '../hooks/useAsync';
 import { getErrorMessage } from '../lib/api';
@@ -128,10 +128,14 @@ export function CheckoutPage() {
             {cart.items.map((i) => (
               <li key={i.id} className="flex justify-between gap-3">
                 <span>{i.quantity} x {i.cakeName}</span>
-                <span>{formatINR(i.lineTotal)}</span>
+                <span>
+                  {i.lineMrp && <span className="mr-1 text-xs text-gray-400 line-through" aria-label="Original price">{formatINR(i.lineMrp)}</span>}
+                  {formatINR(i.lineTotal)}
+                </span>
               </li>
             ))}
           </ul>
+          <SavingsLine savings={cart.savings} />
           <div className="flex justify-between border-t pt-3 font-bold"><span>Total</span><span>{formatINR(cart.subtotal)}</span></div>
           <Notice tone="blue">Next step: a simulated payment. No real money is charged.</Notice>
           {cart.hasUnavailableItems && <ErrorBox message="Some cakes are unavailable. Please update your cart." />}
