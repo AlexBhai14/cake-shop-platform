@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
       - name: Install lint tools
@@ -90,7 +90,7 @@ jobs:
       SHADOW_DATABASE_URL: mysql://ci:ci@localhost:3306/ci_shadow
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
       - uses: actions/cache@v4
@@ -137,7 +137,7 @@ jobs:
         working-directory: frontend/${{ matrix.app }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
       - uses: actions/cache@v4
@@ -161,7 +161,7 @@ jobs:
         working-directory: backend/inventory-service
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
       - name: Install dependencies
