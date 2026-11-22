@@ -1,0 +1,271 @@
+# CI/CD pipeline of the Cake Shop Platform.
+#
+#   every push and pull request:  lint -> backend tests (9 services) -> frontend tests (2 apps)
+#                                 -> integration test (real MySQL) -> secret scan
+#   push to main only:            build Docker images -> push to Docker Hub
+#                                 -> deploy to Kubernetes (needs APPROVAL) -> smoke test -> rollback on failure
+#
+# Untested code is never deployed: "publish" and "deploy" need every test job to be green.
+name: CI/CD
+
+on:
+  push:
+    branches: [main, 'phase/**', 'feature/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install lint tools
+        run: npm install --no-audit --no-fund
+      - name: ESLint
+        run: npx eslint .
+
+  secrets-scan:
+    name: Scan for committed secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The repository is PUBLIC: a password in Git would be public too.
+      - name: Trivy secret scan (fails on findings)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scanners: secret
+          skip-files: '.env.example,backend/auth-service/.env.example'
+          skip-dirs: 'node_modules,docs'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          format: table
+      - name: Trivy configuration scan (report only)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scanners: misconfig
+          skip-dirs: 'node_modules'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+          format: table
+
+  backend:
+    name: Backend (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - api-gateway
+          - auth-service
+          - user-service
+          - product-service
+          - cart-service
+          - inventory-service
+          - order-service
+          - payment-service
+          - notification-service
+    defaults:
+      run:
+        working-directory: backend/${{ matrix.service }}
+    env:
+      # Only needed so that "prisma generate" can read the schema. No database is contacted.
+      DATABASE_URL: mysql://ci:ci@localhost:3306/ci
+      SHADOW_DATABASE_URL: mysql://ci:ci@localhost:3306/ci_shadow
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ matrix.service }}-${{ hashFiles(format('backend/{0}/package.json', matrix.service)) }}
+          restore-keys: npm-${{ runner.os }}-${{ matrix.service }}-
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
+      - name: Generate Prisma client
+        run: |
+          if [ -f prisma/schema.prisma ]; then npx prisma generate; fi
+      - name: Migrations are committed
+        run: |
+          if [ -f prisma/schema.prisma ] && [ ! -d prisma/migrations ]; then
+            echo "::error::prisma/migrations is missing. Run 'npx prisma migrate dev' and commit the folder."
+            exit 1
+          fi
+      - name: Build (TypeScript compile)
+        run: npm run build
+      - name: Unit tests
+        run: npm test -- --ci --coverage
+      - name: Dependency audit (report only)
+        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=high
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.service }}
+          path: backend/${{ matrix.service }}/coverage
+          if-no-files-found: ignore
+          retention-days: 7
+
+  frontend:
+    name: Frontend (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [customer-app, admin-app]
+    defaults:
+      run:
+        working-directory: frontend/${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ matrix.app }}-${{ hashFiles(format('frontend/{0}/package.json', matrix.app)) }}
+          restore-keys: npm-${{ runner.os }}-${{ matrix.app }}-
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
+      - name: Unit and component tests
+        run: npm test
+      - name: Type check and production build
+        run: npm run build
+
+  integration:
+    name: Integration test (real MySQL in Testcontainers)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/inventory-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
+      - name: Generate Prisma client
+        env:
+          DATABASE_URL: mysql://ci:ci@localhost:3306/ci
+          SHADOW_DATABASE_URL: mysql://ci:ci@localhost:3306/ci_shadow
+        run: npx prisma generate
+      - name: Overselling and concurrency tests
+        run: npm run test:int
+
+  publish:
+    name: Publish image (${{ matrix.image }})
+    needs: [lint, secrets-scan, backend, frontend, integration]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: api-gateway, context: backend/api-gateway }
+          - { image: auth-service, context: backend/auth-service }
+          - { image: user-service, context: backend/user-service }
+          - { image: product-service, context: backend/product-service }
+          - { image: cart-service, context: backend/cart-service }
+          - { image: inventory-service, context: backend/inventory-service }
+          - { image: order-service, context: backend/order-service }
+          - { image: payment-service, context: backend/payment-service }
+          - { image: notification-service, context: backend/notification-service }
+          - { image: customer-app, context: frontend/customer-app }
+          - { image: admin-app, context: frontend/admin-app }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          # The commit SHA is the version: every deployment can be traced back to one commit
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/cake-${{ matrix.image }}:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/cake-${{ matrix.image }}:latest
+          # Only the two React apps use this argument (the API address is baked into the build)
+          build-args: |
+            VITE_API_URL=${{ vars.VITE_API_URL || 'http://localhost:3000' }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  deploy:
+    name: Deploy to Kubernetes
+    needs: publish
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # "production" is a GitHub Environment with REQUIRED REVIEWERS: the job waits here until you approve it.
+    environment:
+      name: production
+    # Repository variable DEPLOY_RUNNER=self-hosted deploys to the cluster on your own PC (Docker Desktop).
+    # Without it the job runs on a GitHub runner and uses the KUBE_CONFIG secret of a reachable cluster.
+    runs-on: ${{ vars.DEPLOY_RUNNER || 'ubuntu-latest' }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      NAMESPACE: cake-shop
+      DEPLOYMENTS: api-gateway auth-service user-service product-service cart-service inventory-service order-service payment-service notification-service customer-app admin-app
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure kubectl for a remote cluster
+        if: ${{ vars.DEPLOY_RUNNER != 'self-hosted' }}
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          mkdir -p ~/.kube
+          echo "$KUBE_CONFIG" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+      - name: Check the cluster and the Secret
+        run: |
+          kubectl get nodes
+          kubectl get secret cake-secrets -n "$NAMESPACE" > /dev/null || {
+            echo "::error::Secret cake-secrets is missing in the cluster. Run scripts/create-k8s-secret.ps1 once."
+            exit 1
+          }
+      - name: Render the manifests for this commit
+        run: bash scripts/ci-render-overlay.sh "${{ secrets.DOCKERHUB_USERNAME }}" "${{ github.sha }}"
+      - name: Apply
+        run: kubectl apply -k infrastructure/kubernetes/overlays/ci
+      - name: Wait for the rolling update
+        run: |
+          for d in $DEPLOYMENTS; do
+            kubectl rollout status "deployment/$d" -n "$NAMESPACE" --timeout=300s
+          done
+      - name: Smoke test
+        run: bash scripts/smoke-test.sh
+      - name: Roll back after a failure
+        if: failure()
+        run: |
+          for d in $DEPLOYMENTS; do
+            kubectl rollout undo "deployment/$d" -n "$NAMESPACE" || true
+          done
+          kubectl get pods -n "$NAMESPACE"

@@ -1,0 +1,10 @@
+# Used only by the E2E workflow: the tests create many users from one IP address,
+# so the gateway rate limits are raised. (The rate-limit test is run separately, with the default limits.)
+services:
+  api-gateway:
+    environment:
+      RATE_LOGIN_LIMIT: "1000"
+      RATE_AUTH_LIMIT: "1000"
+      RATE_USER_LIMIT: "5000"
+      RATE_PUBLIC_LIMIT: "5000"
+      RATE_ADMIN_LIMIT: "5000"

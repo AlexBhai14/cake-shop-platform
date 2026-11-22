@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "mysql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+enum ReservationStatus {
+  RESERVED
+  CONFIRMED
+  RELEASED
+}
+
+// Ready-made stock. A variant WITHOUT a row here is "made to order": no stock limit,
+// only the delivery-slot capacity limits it.
+// available = onHand - reserved
+model InventoryItem {
+  id        String   @id @default(uuid()) @db.Char(36)
+  variantId String   @unique @db.Char(36)
+  onHand    Int
+  reserved  Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@map("inventory_items")
+}
+
+// Inventory history: every change of onHand or reserved is recorded.
+model StockMovement {
+  id            String   @id @default(uuid()) @db.Char(36)
+  variantId     String   @db.Char(36)
+  onHandDelta   Int      @default(0)
+  reservedDelta Int      @default(0)
+  reason        String   @db.VarChar(100)
+  orderId       String?  @db.Char(36)
+  createdAt     DateTime @default(now())
+
+  @@index([variantId, createdAt])
+  @@map("stock_movements")
+}
+
+// Production/delivery capacity per day and time slot (counted in cakes).
+model SlotCapacity {
+  id           String   @id @default(uuid()) @db.Char(36)
+  deliveryDate DateTime @db.Date
+  slot         String   @db.VarChar(20)
+  capacity     Int
+  booked       Int      @default(0)
+
+  @@unique([deliveryDate, slot])
+  @@map("slot_capacities")
+}
+
+model Reservation {
+  id           String            @id @default(uuid()) @db.Char(36)
+  orderId      String            @unique @db.Char(36)
+  status       ReservationStatus
+  deliveryDate DateTime          @db.Date
+  slot         String            @db.VarChar(20)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  items        ReservationItem[]
+
+  @@map("reservations")
+}
+
+model ReservationItem {
+  id            String      @id @default(uuid()) @db.Char(36)
+  reservationId String      @db.Char(36)
+  variantId     String      @db.Char(36)
+  quantity      Int
+  tracked       Boolean // true when ready-made stock was reserved for this line
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  @@index([reservationId])
+  @@map("reservation_items")
+}
+
+// Transactional outbox: events waiting to be published to RabbitMQ
+model OutboxEvent {
+  id          String    @id @db.Char(36)
+  type        String    @db.VarChar(60)
+  routingKey  String    @db.VarChar(80)
+  payload     Json
+  createdAt   DateTime  @default(now())
+  publishedAt DateTime?
+  attempts    Int       @default(0)
+
+  @@index([publishedAt, createdAt])
+  @@map("outbox_events")
+}
+
+// Idempotent consumer: ids of events that were already handled
+model ProcessedEvent {
+  eventId     String   @id @db.Char(36)
+  processedAt DateTime @default(now())
+
+  @@map("processed_events")
+}

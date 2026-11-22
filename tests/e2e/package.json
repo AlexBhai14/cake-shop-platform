@@ -1,0 +1,22 @@
+{
+  "name": "cake-shop-e2e",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Black-box end-to-end tests: they talk to the running system only through the API Gateway",
+  "scripts": {
+    "test": "jest --runInBand --testPathIgnorePatterns rate-limit timeout",
+    "test:timeout": "jest --runInBand --testPathPattern timeout",
+    "test:ratelimit": "jest --runInBand --testPathPattern rate-limit",
+    "test:all": "jest --runInBand"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/node": "^22.0.0",
+    "@types/supertest": "^6.0.2",
+    "dotenv": "^16.4.5",
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.6.0"
+  }
+}

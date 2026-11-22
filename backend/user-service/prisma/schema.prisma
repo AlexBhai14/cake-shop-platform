@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "mysql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+// userId is the id from the auth-service. It is NOT a foreign key (different database).
+model Profile {
+  id        String    @id @default(uuid()) @db.Char(36)
+  userId    String    @unique @db.Char(36)
+  email     String    @db.VarChar(255)
+  fullName  String    @db.VarChar(120)
+  phone     String?   @db.VarChar(20)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  addresses Address[]
+
+  @@map("profiles")
+}
+
+model Address {
+  id         String   @id @default(uuid()) @db.Char(36)
+  profileId  String   @db.Char(36)
+  label      String   @db.VarChar(50)
+  line1      String   @db.VarChar(200)
+  line2      String?  @db.VarChar(200)
+  city       String   @db.VarChar(100)
+  state      String   @db.VarChar(100)
+  postalCode String   @db.VarChar(12)
+  country    String   @default("India") @db.VarChar(60)
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  profile    Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+  @@map("addresses")
+}

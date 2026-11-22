@@ -1,0 +1,52 @@
+# Alert rules. Without an Alertmanager they are visible in the Prometheus UI (Alerts page):
+# http://localhost:9090/alerts
+groups:
+  - name: cake-shop
+    rules:
+      - alert: ServiceDown
+        expr: up{job!~"prometheus|rabbitmq.*"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.job }} is down"
+          description: "Prometheus cannot scrape {{ $labels.job }} for 1 minute."
+
+      - alert: HighErrorRate
+        expr: |
+          sum by (service) (rate(http_requests_total{status=~"5.."}[5m]))
+            / sum by (service) (rate(http_requests_total[5m])) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "More than 5% server errors in {{ $labels.service }}"
+
+      - alert: SlowRequests
+        expr: |
+          histogram_quantile(0.95, sum by (le, service) (rate(http_request_duration_seconds_bucket[5m]))) > 1
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "p95 latency above 1 second in {{ $labels.service }}"
+
+      - alert: OutboxBacklog
+        expr: outbox_pending_events > 50
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.service }} has {{ $value }} unpublished events"
+          description: "RabbitMQ is unreachable or the outbox publisher is stuck: the checkout saga is not moving."
+
+      - alert: DeadLetterQueueNotEmpty
+        expr: rabbitmq_detailed_queue_messages{queue=~".*\\.dlq"} > 0
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: "Dead letter queue {{ $labels.queue }} holds {{ $value }} message(s)"
+          description: "An event failed 3 times. Look at the message in the RabbitMQ UI and fix the cause."
+
+      - alert: EmailsFailing
+        expr: notifications_failed > 0
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Some emails could not be sent"

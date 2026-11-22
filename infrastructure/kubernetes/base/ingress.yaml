@@ -1,0 +1,40 @@
+# Needs an ingress controller (see docs/KUBERNETES.md). The frontends must have been built with
+# VITE_API_URL=http://cakeshop.local so that the browser calls the gateway through the same host.
+# /metrics is deliberately NOT routed: only Prometheus inside the cluster may read it.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cake-shop
+  namespace: cake-shop
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 1m
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: cakeshop.local
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: api-gateway
+            port:
+              number: 3000
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: customer-app
+            port:
+              number: 80
+  - host: admin.cakeshop.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: admin-app
+            port:
+              number: 80

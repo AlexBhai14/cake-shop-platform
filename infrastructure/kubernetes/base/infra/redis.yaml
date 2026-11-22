@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: cake-shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        app.kubernetes.io/part-of: cake-shop
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        args: ["--save", "", "--appendonly", "no"]   # rate-limit counters only: losing them is harmless
+        ports:
+        - containerPort: 6379
+        readinessProbe:
+          exec:
+            command: ["redis-cli", "ping"]
+          periodSeconds: 10
+        resources:
+          requests: { cpu: 25m, memory: 32Mi }
+          limits: { cpu: 200m, memory: 128Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: cake-shop
+spec:
+  selector:
+    app: redis
+  ports:
+  - port: 6379

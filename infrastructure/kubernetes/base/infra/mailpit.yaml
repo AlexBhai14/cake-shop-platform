@@ -1,0 +1,46 @@
+# Mailpit is a TEST inbox. In production replace it with a real SMTP provider
+# (change SMTP_HOST / SMTP_PORT in the ConfigMap and add the credentials to the Secret).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailpit
+  namespace: cake-shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mailpit
+  template:
+    metadata:
+      labels:
+        app: mailpit
+        app.kubernetes.io/part-of: cake-shop
+    spec:
+      containers:
+      - name: mailpit
+        image: axllent/mailpit:latest
+        ports:
+        - name: smtp
+          containerPort: 1025
+        - name: http
+          containerPort: 8025
+        readinessProbe:
+          httpGet: { path: /, port: http }
+          periodSeconds: 10
+        resources:
+          requests: { cpu: 25m, memory: 32Mi }
+          limits: { cpu: 200m, memory: 128Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailpit
+  namespace: cake-shop
+spec:
+  selector:
+    app: mailpit
+  ports:
+  - name: smtp
+    port: 1025
+  - name: http
+    port: 8025

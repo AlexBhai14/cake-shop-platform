@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-app
+  namespace: cake-shop
+  labels:
+    app: admin-app
+    app.kubernetes.io/part-of: cake-shop
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: admin-app
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: admin-app
+        app.kubernetes.io/part-of: cake-shop
+    spec:
+      containers:
+      - name: admin-app
+        image: cake-shop/admin-app:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 80
+        readinessProbe:
+          httpGet: { path: /, port: http }
+          periodSeconds: 10
+        livenessProbe:
+          httpGet: { path: /, port: http }
+          periodSeconds: 20
+        resources:
+          requests: { cpu: 25m, memory: 32Mi }
+          limits: { cpu: 200m, memory: 128Mi }
+        securityContext:
+          allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-app
+  namespace: cake-shop
+  labels:
+    app: admin-app
+spec:
+  selector:
+    app: admin-app
+  ports:
+  - name: http
+    port: 80
+    targetPort: http

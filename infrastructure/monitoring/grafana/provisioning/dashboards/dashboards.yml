@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: cake-shop
+    type: file
+    folder: Cake Shop
+    options:
+      path: /var/lib/grafana/dashboards

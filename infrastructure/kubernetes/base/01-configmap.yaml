@@ -1,0 +1,47 @@
+# Non-secret configuration shared by all pods. Secrets (passwords, JWT secret) are NOT here:
+# they live in the Secret "cake-secrets" that scripts/create-k8s-secret.ps1 creates from your local .env.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cake-config
+  namespace: cake-shop
+data:
+  NODE_ENV: "production"
+  JWT_ACCESS_TTL: "15m"
+  REFRESH_TOKEN_TTL_DAYS: "7"
+  BCRYPT_ROUNDS: "12"
+  RETRY_DELAY_MS: "5000"
+  OUTBOX_POLL_MS: "1000"
+  SLOTS: "10:00-12:00,12:00-14:00,14:00-16:00,16:00-18:00"
+  DEFAULT_SLOT_CAPACITY: "10"
+  MIN_LEAD_DAYS: "1"
+  MAX_ADVANCE_DAYS: "60"
+  PAYMENT_TIMEOUT_MINUTES: "15"
+  AUTO_PAY_SCENARIO: "NONE"
+  TIMEOUT_RESOLVES_TO: "SUCCEEDED"
+  RECONCILE_AFTER_SECONDS: "30"
+  SMTP_HOST: "mailpit"
+  SMTP_PORT: "1025"
+  MAIL_FROM: "Cake Shop <no-reply@cakeshop.local>"
+  EMAIL_POLL_MS: "2000"
+  REDIS_URL: "redis://redis:6379"
+  UPSTREAM_TIMEOUT_MS: "8000"
+  CORS_ORIGINS: "http://localhost:5173,http://localhost:5174,http://cakeshop.local,http://admin.cakeshop.local"
+  AUTH_SERVICE_URL: "http://auth-service:3001"
+  USER_SERVICE_URL: "http://user-service:3002"
+  PRODUCT_SERVICE_URL: "http://product-service:3003"
+  CART_SERVICE_URL: "http://cart-service:3004"
+  INVENTORY_SERVICE_URL: "http://inventory-service:3005"
+  ORDER_SERVICE_URL: "http://order-service:3006"
+  PAYMENT_SERVICE_URL: "http://payment-service:3007"
+  NOTIFICATION_SERVICE_URL: "http://notification-service:3008"
+  RATE_LOGIN_LIMIT: "5"
+  RATE_LOGIN_WINDOW_SEC: "60"
+  RATE_AUTH_LIMIT: "10"
+  RATE_AUTH_WINDOW_SEC: "60"
+  RATE_PUBLIC_LIMIT: "120"
+  RATE_PUBLIC_WINDOW_SEC: "60"
+  RATE_USER_LIMIT: "100"
+  RATE_USER_WINDOW_SEC: "60"
+  RATE_ADMIN_LIMIT: "60"
+  RATE_ADMIN_WINDOW_SEC: "60"

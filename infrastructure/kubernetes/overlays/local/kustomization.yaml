@@ -1,0 +1,39 @@
+# LOCAL images: built on your PC by scripts/build-images.ps1 and loaded into the cluster by scripts/load-images-to-k8s.ps1
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+images:
+  - name: cake-shop/api-gateway
+    newName: cake-api-gateway
+    newTag: local
+  - name: cake-shop/auth-service
+    newName: cake-auth-service
+    newTag: local
+  - name: cake-shop/user-service
+    newName: cake-user-service
+    newTag: local
+  - name: cake-shop/product-service
+    newName: cake-product-service
+    newTag: local
+  - name: cake-shop/cart-service
+    newName: cake-cart-service
+    newTag: local
+  - name: cake-shop/inventory-service
+    newName: cake-inventory-service
+    newTag: local
+  - name: cake-shop/order-service
+    newName: cake-order-service
+    newTag: local
+  - name: cake-shop/payment-service
+    newName: cake-payment-service
+    newTag: local
+  - name: cake-shop/notification-service
+    newName: cake-notification-service
+    newTag: local
+  - name: cake-shop/customer-app
+    newName: cake-customer-app
+    newTag: local
+  - name: cake-shop/admin-app
+    newName: cake-admin-app
+    newTag: local

@@ -1,0 +1,68 @@
+# Starts the WHOLE system with Docker Compose on a GitHub runner and runs the end-to-end tests against it.
+# Slow (about 15 to 25 minutes), so it runs every night and on demand, not on every push.
+name: E2E
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: End-to-end tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      E2E_ADMIN_EMAIL: admin@cakeshop.local
+      E2E_ADMIN_PASSWORD: CiAdmin12345
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Create .env (throw-away passwords for this CI run only)
+        run: cp .env.example .env
+      - name: Start the system
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build --wait --wait-timeout 900 \
+            mysql redis rabbitmq mailpit \
+            auth-service user-service product-service cart-service inventory-service order-service payment-service notification-service \
+            api-gateway
+      - name: Create the admin account
+        run: |
+          set -a; . ./.env; set +a
+          cd backend/auth-service
+          npm install --no-audit --no-fund
+          ADMIN_EMAIL="$E2E_ADMIN_EMAIL" ADMIN_PASSWORD="$E2E_ADMIN_PASSWORD" \
+          DATABASE_URL="mysql://auth_user:${AUTH_DB_PASSWORD}@127.0.0.1:3306/cake_auth_db" \
+          SHADOW_DATABASE_URL="mysql://auth_user:${AUTH_DB_PASSWORD}@127.0.0.1:3306/cake_auth_db_shadow" \
+          npm run seed
+      - name: Install the test tools
+        working-directory: tests/e2e
+        run: npm install --no-audit --no-fund
+      - name: End-to-end tests
+        working-directory: tests/e2e
+        env:
+          E2E_BASE_URL: http://localhost:3000
+          MAILPIT_URL: http://localhost:8025
+        run: npm test
+      - name: Bank timeout test (about 1 minute)
+        working-directory: tests/e2e
+        env:
+          E2E_BASE_URL: http://localhost:3000
+        run: npm run test:timeout
+      - name: Save the container logs
+        if: failure()
+        run: docker compose logs --no-color --tail 400 > compose-logs.txt
+      - name: Upload the logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compose-logs
+          path: compose-logs.txt
+      - name: Stop the system
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v

@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "mysql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  UNKNOWN
+  REFUNDED
+  CANCELLED
+}
+
+enum TransactionType {
+  CHARGE
+  REFUND
+}
+
+enum TransactionStatus {
+  SUCCEEDED
+  FAILED
+  UNKNOWN
+}
+
+// MOCK payment: nothing here talks to a real bank or card network.
+model Payment {
+  id            String               @id @default(uuid()) @db.Char(36)
+  orderId       String               @unique @db.Char(36) // one payment per order = natural idempotency
+  userId        String               @db.Char(36)
+  customerEmail String?              @db.VarChar(255)
+  amount        Decimal              @db.Decimal(10, 2)
+  currency      String               @default("INR") @db.VarChar(3)
+  status        PaymentStatus        @default(PENDING)
+  gatewayRef    String?              @db.VarChar(80)
+  failureReason String?              @db.VarChar(100)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  transactions  PaymentTransaction[]
+
+  @@index([status, updatedAt])
+  @@map("payments")
+}
+
+// Every money movement (charge or refund) is recorded, never overwritten.
+model PaymentTransaction {
+  id         String            @id @default(uuid()) @db.Char(36)
+  paymentId  String            @db.Char(36)
+  type       TransactionType
+  amount     Decimal           @db.Decimal(10, 2)
+  status     TransactionStatus
+  gatewayRef String?           @db.VarChar(80)
+  reason     String?           @db.VarChar(100)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  payment    Payment           @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@map("payment_transactions")
+}
+
+model OutboxEvent {
+  id          String    @id @db.Char(36)
+  type        String    @db.VarChar(60)
+  routingKey  String    @db.VarChar(80)
+  payload     Json
+  createdAt   DateTime  @default(now())
+  publishedAt DateTime?
+  attempts    Int       @default(0)
+
+  @@index([publishedAt, createdAt])
+  @@map("outbox_events")
+}
+
+model ProcessedEvent {
+  eventId     String   @id @db.Char(36)
+  processedAt DateTime @default(now())
+
+  @@map("processed_events")
+}

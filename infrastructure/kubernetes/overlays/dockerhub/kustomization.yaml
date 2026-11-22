@@ -1,0 +1,40 @@
+# DOCKER HUB images (pushed by the GitHub Actions pipeline in the next batch).
+# Replace DOCKERHUB_USER with your Docker Hub user name.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+images:
+  - name: cake-shop/api-gateway
+    newName: DOCKERHUB_USER/cake-api-gateway
+    newTag: latest
+  - name: cake-shop/auth-service
+    newName: DOCKERHUB_USER/cake-auth-service
+    newTag: latest
+  - name: cake-shop/user-service
+    newName: DOCKERHUB_USER/cake-user-service
+    newTag: latest
+  - name: cake-shop/product-service
+    newName: DOCKERHUB_USER/cake-product-service
+    newTag: latest
+  - name: cake-shop/cart-service
+    newName: DOCKERHUB_USER/cake-cart-service
+    newTag: latest
+  - name: cake-shop/inventory-service
+    newName: DOCKERHUB_USER/cake-inventory-service
+    newTag: latest
+  - name: cake-shop/order-service
+    newName: DOCKERHUB_USER/cake-order-service
+    newTag: latest
+  - name: cake-shop/payment-service
+    newName: DOCKERHUB_USER/cake-payment-service
+    newTag: latest
+  - name: cake-shop/notification-service
+    newName: DOCKERHUB_USER/cake-notification-service
+    newTag: latest
+  - name: cake-shop/customer-app
+    newName: DOCKERHUB_USER/cake-customer-app
+    newTag: latest
+  - name: cake-shop/admin-app
+    newName: DOCKERHUB_USER/cake-admin-app
+    newTag: latest

@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "mysql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+// Every email is first SAVED here (together with the "event processed" marker), then a
+// background dispatcher sends it. A mail server outage therefore never loses a notification.
+model Notification {
+  id            String             @id @default(uuid()) @db.Char(36)
+  eventId       String             @unique @db.Char(36) // one notification per event
+  userId        String?            @db.Char(36)
+  orderId       String?            @db.Char(36)
+  type          String             @db.VarChar(40)
+  toEmail       String             @db.VarChar(255)
+  subject       String             @db.VarChar(200)
+  bodyText      String             @db.Text
+  bodyHtml      String             @db.Text
+  status        NotificationStatus @default(PENDING)
+  attempts      Int                @default(0)
+  nextAttemptAt DateTime           @default(now())
+  lastError     String?            @db.VarChar(300)
+  createdAt     DateTime           @default(now())
+  sentAt        DateTime?
+
+  @@index([status, nextAttemptAt])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model ProcessedEvent {
+  eventId     String   @id @db.Char(36)
+  processedAt DateTime @default(now())
+
+  @@map("processed_events")
+}

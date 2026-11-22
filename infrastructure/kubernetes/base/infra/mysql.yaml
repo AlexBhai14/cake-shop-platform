@@ -1,0 +1,151 @@
+# MySQL inside the cluster: good for learning and for a demo.
+# Production note: use a managed database (for example Amazon RDS or Google Cloud SQL) with backups,
+# replicas and patching done for you. Then delete this file and point DATABASE_URL to the managed host.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-init
+  namespace: cake-shop
+data:
+  01-init-databases.sh: |
+    #!/bin/bash
+    # Runs ONCE, only when the MySQL data volume is empty.
+    # Creates one database + one least-privilege user per microservice.
+    # Each user can access only its own database (and its own shadow database,
+    # which Prisma Migrate needs during development).
+    set -euo pipefail
+
+    for svc in auth user product cart inventory order payment notification; do
+      upper=$(echo "$svc" | tr '[:lower:]' '[:upper:]')
+      pw_var="${upper}_DB_PASSWORD"
+      pw="${!pw_var:?Missing environment variable $pw_var}"
+
+      mysql -uroot -p"$MYSQL_ROOT_PASSWORD" <<EOSQL
+    CREATE DATABASE IF NOT EXISTS cake_${svc}_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    CREATE DATABASE IF NOT EXISTS cake_${svc}_db_shadow CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    CREATE USER IF NOT EXISTS '${svc}_user'@'%' IDENTIFIED BY '${pw}';
+    GRANT ALL PRIVILEGES ON cake_${svc}_db.* TO '${svc}_user'@'%';
+    GRANT ALL PRIVILEGES ON cake_${svc}_db_shadow.* TO '${svc}_user'@'%';
+    FLUSH PRIVILEGES;
+    EOSQL
+      echo "Created database and user for service: ${svc}"
+    done
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: cake-shop
+spec:
+  clusterIP: None        # headless service: the name "mysql" points straight to the pod
+  selector:
+    app: mysql
+  ports:
+  - name: mysql
+    port: 3306
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+  namespace: cake-shop
+spec:
+  serviceName: mysql
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+        app.kubernetes.io/part-of: cake-shop
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.4
+        ports:
+        - name: mysql
+          containerPort: 3306
+        env:
+        - name: TZ
+          value: UTC
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: cake-secrets
+              key: MYSQL_ROOT_PASSWORD
+        - name: AUTH_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: cake-secrets
+              key: AUTH_DB_PASSWORD
+        - name: USER_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: cake-secrets
+              key: USER_DB_PASSWORD
+        - name: PRODUCT_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: cake-secrets
+              key: PRODUCT_DB_PASSWORD
+        - name: CART_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: cake-secrets
+              key: CART_DB_PASSWORD
+        - name: INVENTORY_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: cake-secrets
+              key: INVENTORY_DB_PASSWORD
+        - name: ORDER_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: cake-secrets
+              key: ORDER_DB_PASSWORD
+        - name: PAYMENT_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: cake-secrets
+              key: PAYMENT_DB_PASSWORD
+        - name: NOTIFICATION_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: cake-secrets
+              key: NOTIFICATION_DB_PASSWORD
+        readinessProbe:
+          exec:
+            command: ["sh", "-c", "mysqladmin ping -h 127.0.0.1 -uroot -p$MYSQL_ROOT_PASSWORD --silent"]
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          failureThreshold: 12
+        livenessProbe:
+          exec:
+            command: ["sh", "-c", "mysqladmin ping -h 127.0.0.1 -uroot -p$MYSQL_ROOT_PASSWORD --silent"]
+          initialDelaySeconds: 60
+          periodSeconds: 20
+          failureThreshold: 6
+        resources:
+          requests: { cpu: 100m, memory: 384Mi }
+          limits: { cpu: 1000m, memory: 768Mi }
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/mysql
+        - name: init
+          mountPath: /docker-entrypoint-initdb.d
+      volumes:
+      - name: init
+        configMap:
+          name: mysql-init
+          defaultMode: 0755
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 5Gi

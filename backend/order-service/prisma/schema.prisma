@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "mysql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  ACCEPTED
+  PREPARING
+  READY_FOR_DISPATCH
+  OUT_FOR_DELIVERY
+  DELIVERED
+  PAYMENT_FAILED
+  CANCELLED
+}
+
+// An order stores SNAPSHOTS of price, product details and address.
+// Later changes in the product or user service never change an existing order.
+model Order {
+  id              String        @id @default(uuid()) @db.Char(36)
+  userId          String        @db.Char(36)
+  customerEmail   String?       @db.VarChar(255)
+  status          OrderStatus   @default(PENDING_PAYMENT)
+  totalAmount     Decimal       @db.Decimal(10, 2)
+  currency        String        @default("INR") @db.VarChar(3)
+  deliveryDate    DateTime      @db.Date
+  deliverySlot    String        @db.VarChar(20)
+  deliveryAddress Json
+  idempotencyKey  String?       @db.VarChar(64)
+  paymentId       String?       @db.Char(36)
+  cancelReason    String?       @db.VarChar(100)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  items           OrderItem[]
+  history         OrderStatusHistory[]
+
+  // The same checkout repeated with the same key can never create a second order
+  @@unique([userId, idempotencyKey])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String  @id @default(uuid()) @db.Char(36)
+  orderId     String  @db.Char(36)
+  variantId   String  @db.Char(36)
+  cakeName    String  @db.VarChar(150)
+  flavour     String  @db.VarChar(80)
+  weightGrams Int
+  eggless     Boolean
+  unitPrice   Decimal @db.Decimal(10, 2)
+  quantity    Int
+  message     String? @db.VarChar(200)
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+// Tracking: every status change with time and who did it
+model OrderStatusHistory {
+  id         String   @id @default(uuid()) @db.Char(36)
+  orderId    String   @db.Char(36)
+  fromStatus String?  @db.VarChar(30)
+  toStatus   String   @db.VarChar(30)
+  changedBy  String   @db.VarChar(40)
+  note       String?  @db.VarChar(200)
+  createdAt  DateTime @default(now())
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+  @@map("order_status_history")
+}
+
+model OutboxEvent {
+  id          String    @id @db.Char(36)
+  type        String    @db.VarChar(60)
+  routingKey  String    @db.VarChar(80)
+  payload     Json
+  createdAt   DateTime  @default(now())
+  publishedAt DateTime?
+  attempts    Int       @default(0)
+
+  @@index([publishedAt, createdAt])
+  @@map("outbox_events")
+}
+
+model ProcessedEvent {
+  eventId     String   @id @db.Char(36)
+  processedAt DateTime @default(now())
+
+  @@map("processed_events")
+}

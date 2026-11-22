@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "mysql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+// userId comes from the auth-service (not a foreign key: different database).
+// The cart stores NO prices. Prices are fetched from the product-service every time,
+// so a stale price can never be used.
+model Cart {
+  id        String     @id @default(uuid()) @db.Char(36)
+  userId    String     @unique @db.Char(36)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  items     CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id        String   @id @default(uuid()) @db.Char(36)
+  cartId    String   @db.Char(36)
+  variantId String   @db.Char(36) // id of a product-service variant (no foreign key)
+  quantity  Int
+  message   String?  @db.VarChar(200) // text to write on the cake
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, variantId])
+  @@map("cart_items")
+}
