@@ -40,6 +40,8 @@ model Payment {
   status        PaymentStatus        @default(PENDING)
   gatewayRef    String?              @db.VarChar(80)
   failureReason String?              @db.VarChar(100)
+  // Set when the order service reports DELIVERED. A delivered order can no longer be refunded.
+  orderDelivered Boolean             @default(false)
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @updatedAt
   transactions  PaymentTransaction[]
@@ -63,6 +65,43 @@ model PaymentTransaction {
 
   @@index([paymentId])
   @@map("payment_transactions")
+}
+
+enum WalletTransactionType {
+  CREDIT
+  DEBIT
+}
+
+// MOCK wallet: refunded money is credited here. One wallet per customer (userId).
+model Wallet {
+  id           String              @id @default(uuid()) @db.Char(36)
+  userId       String              @unique @db.Char(36)
+  balance      Decimal             @default(0) @db.Decimal(10, 2)
+  currency     String              @default("INR") @db.VarChar(3)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  transactions WalletTransaction[]
+
+  @@map("wallets")
+}
+
+// Every wallet movement is recorded, never overwritten (like a bank passbook).
+model WalletTransaction {
+  id           String                @id @default(uuid()) @db.Char(36)
+  walletId     String                @db.Char(36)
+  type         WalletTransactionType
+  amount       Decimal               @db.Decimal(10, 2)
+  balanceAfter Decimal               @db.Decimal(10, 2)
+  orderId      String?               @db.Char(36)
+  paymentId    String?               @db.Char(36)
+  reason       String?               @db.VarChar(100)
+  createdAt    DateTime              @default(now())
+  wallet       Wallet                @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  // A payment can be credited to the wallet only once (extra safety on top of idempotent consumers).
+  @@unique([paymentId, type])
+  @@index([walletId, createdAt])
+  @@map("wallet_transactions")
 }
 
 model OutboxEvent {

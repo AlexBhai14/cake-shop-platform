@@ -148,6 +148,12 @@ docs/               architecture, API, learning notes, report
 ```
 
 ## Project status
+PS D:\Sahil_Code\Project\cake-shop-platform-FULL\cake-shop-platform> 3000..3008 | ForEach-Object { "$_ -> " + (curl.exe -s -o NUL -w "%{http_code}" "http://localhost:$_/health") }  
+
+
+3000..3008 | ForEach-Object { "$_ -> " + (curl.exe -s -o NUL -w "%{http_code}" "http://localhost:$_/health") }  
+
+
 
 All nine backend services, both front ends, the Kubernetes manifests, monitoring and the CI/CD pipeline are implemented.
 The real results of the test runs and of the load test on the author's machine are recorded in the project report (chapter 8).

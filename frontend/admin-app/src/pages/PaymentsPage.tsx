@@ -16,7 +16,7 @@ export function PaymentsPage() {
   const payments = useAsync(() => paymentsApi.list(page, LIMIT), [page]);
 
   const refund = async (orderId: string) => {
-    if (!window.confirm('Refund this payment (simulated)?')) return;
+    if (!window.confirm('Refund this payment (simulated)? The amount is added to the customer wallet.')) return;
     setError(null);
     try {
       await paymentsApi.refund(orderId);
@@ -46,7 +46,7 @@ export function PaymentsPage() {
                     <td>{formatINR(p.amount)}</td>
                     <td className={p.status === 'UNKNOWN' ? 'font-semibold text-amber-600' : ''}>{p.status}</td>
                     <td>{formatDateTime(p.createdAt)}</td>
-                    <td className="text-right">{p.status === 'SUCCEEDED' && <button className="btn-danger" onClick={() => void refund(p.orderId)}>Refund</button>}</td>
+                    <td className="text-right">{p.refundable && <button className="btn-danger" onClick={() => void refund(p.orderId)}>Refund</button>}</td>
                   </tr>
                 ))}
                 {payments.data.items.length === 0 && <tr><td colSpan={6} className="text-center text-slate-500">No payments yet.</td></tr>}

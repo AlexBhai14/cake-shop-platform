@@ -163,3 +163,19 @@ export interface Payment {
 }
 
 export type Scenario = 'SUCCESS' | 'FAILURE' | 'TIMEOUT';
+
+export interface Wallet {
+  balance: string;
+  currency: string;
+  notice: string;
+}
+
+export interface WalletTx {
+  id: string;
+  type: 'CREDIT' | 'DEBIT';
+  amount: string;
+  balanceAfter: string;
+  orderId: string | null;
+  reason: string | null;
+  createdAt: string;
+}

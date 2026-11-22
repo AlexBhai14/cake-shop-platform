@@ -94,7 +94,11 @@ Stock and slot are reserved afterwards through events: the order may become `CAN
 | GET `/payments/orders/:orderId` | owner or ADMIN | Payment with transactions and a notice that no real money moves. 404 until the stock is reserved |
 | POST `/payments/orders/:orderId/pay` `{scenario: SUCCESS, FAILURE or TIMEOUT}` | owner | Simulated payment. Repeating it never charges twice. `TIMEOUT` leaves the status `UNKNOWN` until reconciliation |
 | GET `/payments/admin/all?page&limit` | ADMIN | All payments |
-| POST `/payments/orders/:orderId/refund` | ADMIN | Mock refund of a `SUCCEEDED` payment (only once) |
+| POST `/payments/orders/:orderId/refund` | ADMIN | Mock refund of a `SUCCEEDED` payment (only once). The money is credited to the customer's wallet. A `DELIVERED` order returns 409 |
+| GET `/payments/wallet` | CUSTOMER (own wallet) | Wallet balance (`0.00` if no refund yet) |
+| GET `/payments/wallet/transactions?page&limit` | CUSTOMER (own wallet) | Wallet history, newest first |
+
+Payment responses include `refundable` (true only for a `SUCCEEDED` payment of an order that is not delivered). The admin UI uses it to show or hide the Refund button.
 
 ## Notifications
 

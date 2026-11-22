@@ -111,6 +111,7 @@ export interface AdminPayment {
   status: string;
   amount: string;
   currency: string;
+  refundable?: boolean;
   createdAt: string;
   transactions?: PaymentTx[];
   notice?: string;

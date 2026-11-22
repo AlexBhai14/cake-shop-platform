@@ -36,6 +36,11 @@ export function Layout() {
                 My orders
               </NavLink>
             )}
+            {user && (
+              <NavLink to="/wallet" className={link}>
+                Wallet
+              </NavLink>
+            )}
           </nav>
           <form onSubmit={onSearch} className="ml-auto flex w-full gap-2 sm:w-auto" role="search">
             <input

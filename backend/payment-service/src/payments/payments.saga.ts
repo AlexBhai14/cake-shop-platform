@@ -9,6 +9,7 @@ import { PaymentsService } from './payments.service';
 //   PaymentRequested -> payment record (and automatic mock payment if AUTO_PAY_SCENARIO is set)
 //   RefundRequested  -> mock refund
 //   OrderCancelled   -> a payment that was never paid is cancelled
+//   OrderStatusChanged(DELIVERED) -> the payment is marked as not refundable any more
 @Injectable()
 export class PaymentsSaga implements OnModuleInit, OnModuleDestroy {
   private timer?: NodeJS.Timeout;
@@ -22,7 +23,7 @@ export class PaymentsSaga implements OnModuleInit, OnModuleDestroy {
   onModuleInit() {
     this.rabbit.registerConsumer({
       queue: 'payment.events',
-      bindings: [ROUTING_KEYS.PaymentRequested, ROUTING_KEYS.RefundRequested, ROUTING_KEYS.OrderCancelled],
+      bindings: [ROUTING_KEYS.PaymentRequested, ROUTING_KEYS.RefundRequested, ROUTING_KEYS.OrderCancelled, ROUTING_KEYS.OrderStatusChanged],
       handler: (event) => this.handle(event),
     });
     // Reconciliation: look at payments whose result is unknown
@@ -44,6 +45,9 @@ export class PaymentsSaga implements OnModuleInit, OnModuleDestroy {
           return;
         case 'OrderCancelled':
           await this.payments.cancelPending(tx, event.data.orderId);
+          return;
+        case 'OrderStatusChanged':
+          if (event.data.status === 'DELIVERED') await this.payments.markOrderDelivered(tx, event.data.orderId);
           return;
         default:
           return;

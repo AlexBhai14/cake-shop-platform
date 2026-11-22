@@ -11,6 +11,8 @@ import {
   Profile,
   Scenario,
   Slot,
+  Wallet,
+  WalletTx,
 } from '../lib/types';
 
 export interface TokenPair {
@@ -88,4 +90,10 @@ export const paymentsApi = {
   get: async (orderId: string) => (await api.get<Payment>(`/payments/orders/${orderId}`)).data,
   pay: async (orderId: string, scenario: Scenario) =>
     (await api.post<Payment>(`/payments/orders/${orderId}/pay`, { scenario })).data,
+};
+
+export const walletApi = {
+  get: async () => (await api.get<Wallet>('/payments/wallet')).data,
+  transactions: async (page = 1, limit = 20) =>
+    (await api.get<Page<WalletTx>>('/payments/wallet/transactions', { params: { page, limit } })).data,
 };

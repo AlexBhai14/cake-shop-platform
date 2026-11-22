@@ -22,7 +22,7 @@ Exchange `cake.events` (topic, durable). Every message is an envelope:
 | RefundProcessed | refund.processed | payment | notification | orderId, userId, paymentId, amount, email |
 | OrderConfirmed | order.confirmed | order | inventory, notification | orderId, userId, email |
 | OrderCancelled | order.cancelled | order | inventory, payment, notification | orderId, userId, reason, email |
-| OrderStatusChanged | order.status_changed | order | notification | orderId, userId, status, email |
+| OrderStatusChanged | order.status_changed | order | notification, payment | orderId, userId, status, email |  (payment uses it only to learn that an order is `DELIVERED`, after which no refund is allowed)
 | OrderShipped | order.shipped | order | notification | orderId, userId, email |
 
 Queues: `inventory.events`, `order.events`. Each has `<queue>.retry` (waits RETRY_DELAY_MS, then returns the message)

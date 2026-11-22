@@ -71,7 +71,9 @@ Run `npx prisma migrate dev --name add_customer_email` in `backend/order-service
 
 ## cake_payment_db (implemented, MOCK)
 
-- **payments**: `orderId` UNIQUE (one payment per order = natural idempotency), `userId`, `customerEmail`, `amount` DECIMAL(10,2), `status` (PENDING, PROCESSING, SUCCEEDED, FAILED, UNKNOWN, REFUNDED, CANCELLED), `gatewayRef`, `failureReason`.
+- **payments**: `orderId` UNIQUE (one payment per order = natural idempotency), `userId`, `customerEmail`, `amount` DECIMAL(10,2), `status` (PENDING, PROCESSING, SUCCEEDED, FAILED, UNKNOWN, REFUNDED, CANCELLED), `gatewayRef`, `failureReason`, `orderDelivered` (set from the OrderStatusChanged=DELIVERED event; a delivered order cannot be refunded).
+- **wallets**: one row per customer (`userId` UNIQUE), `balance` DECIMAL(10,2). Refunds are credited here.
+- **wallet_transactions**: wallet passbook (CREDIT/DEBIT, amount, balanceAfter, orderId, paymentId). UNIQUE(paymentId, type) so one payment is credited only once.
 - **payment_transactions**: every CHARGE and REFUND is a new row (type, amount, status SUCCEEDED/FAILED/UNKNOWN). Rows are never overwritten (except UNKNOWN resolved by reconciliation).
 - **outbox_events**, **processed_events**.
 No card numbers or bank data exist anywhere. This is a simulation.

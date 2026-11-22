@@ -29,6 +29,8 @@ describe('PaymentsService (MOCK payments)', () => {
         update: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       paymentTransaction: { create: jest.fn(), updateMany: jest.fn() },
+      wallet: { upsert: jest.fn().mockResolvedValue({ id: 'w1', balance: '1847.00' }) },
+      walletTransaction: { create: jest.fn() },
       outboxEvent: { create: jest.fn() },
     };
     prisma = { ...tx, $transaction: jest.fn(async (fn: any) => fn(tx)) };
@@ -145,6 +147,25 @@ describe('PaymentsService (MOCK payments)', () => {
       expect(tx.outboxEvent.create.mock.calls[0][0].data.payload.data).toMatchObject({ orderId: ORDER, userId: 'u1', amount: '1847.00', email: 'a@b.com' });
     });
 
+    it('credits the refunded amount to the customer wallet in the same transaction', async () => {
+      tx.payment.findUnique.mockResolvedValue({ ...pending, status: 'SUCCEEDED' });
+      await service.refund(tx, ORDER, 'ORDER_CANCELLED', 'corr');
+      expect(tx.wallet.upsert).toHaveBeenCalledWith({
+        where: { userId: 'u1' },
+        create: { userId: 'u1', balance: '1847.00' },
+        update: { balance: { increment: '1847.00' } },
+      });
+      expect(tx.walletTransaction.create.mock.calls[0][0].data).toMatchObject({
+        walletId: 'w1', type: 'CREDIT', amount: '1847.00', balanceAfter: '1847.00', orderId: ORDER, paymentId: 'p1',
+      });
+    });
+
+    it('does not touch the wallet when nothing was refunded', async () => {
+      tx.payment.findUnique.mockResolvedValue({ ...pending, status: 'REFUNDED' });
+      await service.refund(tx, ORDER, 'x', 'corr');
+      expect(tx.wallet.upsert).not.toHaveBeenCalled();
+    });
+
     it('never refunds twice', async () => {
       tx.payment.findUnique.mockResolvedValue({ ...pending, status: 'REFUNDED' });
       expect(await service.refund(tx, ORDER, 'x', 'corr')).toBe(false);
@@ -164,6 +185,37 @@ describe('PaymentsService (MOCK payments)', () => {
     it('admin refund of a non-paid payment returns 409', async () => {
       tx.payment.findUnique.mockResolvedValue(pending);
       await expect(service.adminRefund(ORDER)).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('admin refund of a DELIVERED order returns 409 and changes nothing', async () => {
+      tx.payment.findUnique.mockResolvedValue({ ...pending, status: 'SUCCEEDED', orderDelivered: true });
+      await expect(service.adminRefund(ORDER)).rejects.toThrow('delivered');
+      expect(tx.paymentTransaction.create).not.toHaveBeenCalled();
+      expect(tx.wallet.upsert).not.toHaveBeenCalled();
+      expect(published()).toEqual([]);
+    });
+  });
+
+  describe('refundable flag', () => {
+    const row = { ...pending, status: 'SUCCEEDED', transactions: [] };
+    it('is true for a paid order that is not delivered', async () => {
+      tx.payment.findUnique.mockResolvedValue({ ...row, orderDelivered: false });
+      expect((await service.getOne(admin, ORDER)).refundable).toBe(true);
+    });
+    it('is false once the order is delivered', async () => {
+      tx.payment.findUnique.mockResolvedValue({ ...row, orderDelivered: true });
+      expect((await service.getOne(admin, ORDER)).refundable).toBe(false);
+    });
+    it('is false for a payment that is not SUCCEEDED', async () => {
+      tx.payment.findUnique.mockResolvedValue({ ...row, status: 'REFUNDED' });
+      expect((await service.getOne(admin, ORDER)).refundable).toBe(false);
+    });
+  });
+
+  describe('markOrderDelivered', () => {
+    it('flags the payment of that order', async () => {
+      await service.markOrderDelivered(tx, ORDER);
+      expect(tx.payment.updateMany).toHaveBeenCalledWith({ where: { orderId: ORDER }, data: { orderDelivered: true } });
     });
   });
 

@@ -1,3 +1,4 @@
+
 # SETUP GUIDE: Batch 9 (CI/CD, lint, documentation, report)
 
 Extract this zip into `D:\Sahil_Code\Project\Cake\cake-shop-platform` (merge, replace when asked).

@@ -109,10 +109,13 @@ export function OrderDetailPage() {
                     <li key={t.id} className="text-slate-600">{t.type} {t.status} · {formatINR(t.amount)} · {formatDateTime(t.createdAt)}</li>
                   ))}
                 </ul>
-                {payment.data.status === 'SUCCEEDED' && (
-                  <button className="btn-danger mt-3" disabled={busy} onClick={() => { if (window.confirm('Refund this payment (simulated)?')) void act(() => paymentsApi.refund(id)); }}>
+                {payment.data.refundable && o.status !== 'DELIVERED' && (
+                  <button className="btn-danger mt-3" disabled={busy} onClick={() => { if (window.confirm('Refund this payment (simulated)? The amount is added to the customer wallet.')) void act(() => paymentsApi.refund(id)); }}>
                     Refund (mock)
                   </button>
+                )}
+                {payment.data.status === 'SUCCEEDED' && !payment.data.refundable && (
+                  <p className="mt-3 text-xs text-slate-500">This order was delivered, so it can no longer be refunded.</p>
                 )}
               </>
             ) : (

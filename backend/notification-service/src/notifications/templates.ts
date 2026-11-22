@@ -71,6 +71,6 @@ export function renderEmail(kind: EmailKind, ctx: EmailContext): RenderedEmail {
     case 'ORDER_SHIPPED':
       return wrap('Your cake is out for delivery', 'Your cake is on its way to you.', ctx.orderId);
     case 'REFUND_PROCESSED':
-      return wrap('Refund processed', `A (simulated) refund of INR ${ctx.amount ?? ''} was processed for your order.`, ctx.orderId);
+      return wrap('Refund processed', `A (simulated) refund of INR ${ctx.amount ?? ''} was processed for your order. The amount has been added to your wallet.`, ctx.orderId);
   }
 }

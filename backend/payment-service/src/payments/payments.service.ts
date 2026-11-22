@@ -5,6 +5,7 @@ import { PaymentRequestedAlias } from './types';
 import { enqueueEvent } from '../messaging/idempotency';
 import { PrismaService } from '../prisma/prisma.service';
 import { MockGateway, Scenario } from './mock-gateway';
+import { creditWallet } from '../wallet/wallet.service';
 
 export interface AuthUser {
   userId: string;
@@ -13,6 +14,9 @@ export interface AuthUser {
 }
 
 export const NOTICE = 'MOCK PAYMENT: this is a simulation. No real money is processed.';
+
+// A payment can be refunded only while it is SUCCEEDED and the order has not been delivered yet.
+export const isRefundable = (p: { status: string; orderDelivered?: boolean }) => p.status === 'SUCCEEDED' && !p.orderDelivered;
 const AUTO = ['SUCCESS', 'FAILURE', 'TIMEOUT'];
 
 @Injectable()
@@ -63,6 +67,11 @@ export class PaymentsService {
     return r.outcome;
   }
 
+  // The order service told us the order was delivered: from now on no refund is allowed.
+  async markOrderDelivered(tx: any, orderId: string) {
+    await tx.payment.updateMany({ where: { orderId }, data: { orderDelivered: true } });
+  }
+
   async cancelPending(tx: any, orderId: string) {
     // The order was cancelled: the customer must not be able to pay for it any more.
     await tx.payment.updateMany({ where: { orderId, status: 'PENDING' }, data: { status: 'CANCELLED' } });
@@ -90,7 +99,7 @@ export class PaymentsService {
     const payment = await this.prisma.payment.findUnique({ where: { orderId }, include: { transactions: { orderBy: { createdAt: 'asc' } } } });
     if (!payment) throw new NotFoundException('Payment not found');
     if (user.role !== 'ADMIN' && payment.userId !== user.userId) throw new ForbiddenException('You cannot access this payment');
-    return { ...payment, amount: payment.amount.toString(), notice: NOTICE };
+    return { ...payment, amount: payment.amount.toString(), refundable: isRefundable(payment), notice: NOTICE };
   }
 
   async listAll(page = 1, limit = 20) {
@@ -98,7 +107,7 @@ export class PaymentsService {
       this.prisma.payment.findMany({ orderBy: { createdAt: 'desc' }, skip: (page - 1) * limit, take: limit }),
       this.prisma.payment.count(),
     ]);
-    return { items: items.map((p) => ({ ...p, amount: p.amount.toString() })), total, page, limit, notice: NOTICE };
+    return { items: items.map((p) => ({ ...p, amount: p.amount.toString(), refundable: isRefundable(p) })), total, page, limit, notice: NOTICE };
   }
 
   // ---------- Refunds (mock) ----------
@@ -116,6 +125,8 @@ export class PaymentsService {
       data: { paymentId: payment.id, type: 'REFUND', amount: payment.amount, status: 'SUCCEEDED', gatewayRef: `mock_refund_${randomUUID()}`, reason },
     });
     await tx.payment.update({ where: { id: payment.id }, data: { status: 'REFUNDED' } });
+    // The refunded money goes to the customer's wallet (same transaction as the status change).
+    await creditWallet(tx, { userId: payment.userId, amount: payment.amount, orderId, paymentId: payment.id, reason });
     await enqueueEvent(tx, 'RefundProcessed', {
       orderId, userId: payment.userId, paymentId: payment.id, amount: payment.amount.toString(), email: payment.customerEmail ?? undefined,
     }, correlationId);
@@ -123,7 +134,11 @@ export class PaymentsService {
   }
 
   async adminRefund(orderId: string, correlationId: string = randomUUID()) {
-    const done = await this.prisma.$transaction((tx) => this.refund(tx, orderId, 'ADMIN_REFUND', correlationId));
+    const done = await this.prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.findUnique({ where: { orderId } });
+      if (payment?.orderDelivered) throw new ConflictException('A delivered order cannot be refunded');
+      return this.refund(tx, orderId, 'ADMIN_REFUND', correlationId);
+    });
     if (!done) throw new ConflictException('Only a SUCCEEDED payment can be refunded');
     return this.getOne({ userId: 'admin', email: '', role: 'ADMIN' }, orderId);
   }
