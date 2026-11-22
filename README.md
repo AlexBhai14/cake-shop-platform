@@ -72,12 +72,101 @@ Copy-Item .env.example .env        # then change every password in .env
 docker compose up -d mysql redis rabbitmq mailpit
 ```
 
-Then, for each backend service folder: `Copy-Item .env.example .env`, `npm install`, `npx prisma migrate dev --name init`, `npm run start:dev`.
-Create the admin account with `npm run seed` in `backend/auth-service`, the demo cakes with `npm run seed` in `backend/product-service`,
-and start the two React apps with `npm run dev` (customer http://localhost:5173, admin http://localhost:5174).
-The complete step-by-step guides are the `SETUP_BATCH*.md` files in the repository root.
+## Run the project (every day)
 
-To run everything in containers: `docker compose up -d --build`.
+Requirements: Docker Desktop must be open and show "Engine running".
+
+**1. Open the project in VS Code**
+
+```powershell
+cd D:\Sahil_Code\Project\cake-shop-platform-FULL\cake-shop-platform
+code .
+```
+
+**2. Start the infrastructure (MySQL, Redis, RabbitMQ, Mailpit)**
+
+```powershell
+docker compose up -d mysql redis rabbitmq mailpit
+docker compose ps
+```
+
+Wait until `mysql`, `redis` and `rabbitmq` show `healthy` (about one minute). If you start the services before MySQL is healthy you will see `P1001: Can't reach database server`.
+
+**3. Start the 9 services and the 2 React apps**
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\start-all.ps1
+```
+
+Eleven PowerShell windows open, one per service. Wait about a minute, then open:
+
+| What | URL |
+|---|---|
+| Customer shop | http://localhost:5173 |
+| Admin panel | http://localhost:5174 |
+| API Gateway health | http://localhost:3000/health |
+| Test inbox (emails) | http://localhost:8025 |
+
+**4. After pulling new code that changes a database schema**, run once in that service folder:
+
+```powershell
+npx prisma migrate deploy
+```
+
+(Use `npx prisma migrate dev --name <change_name>` only while you are developing a new schema change.)
+
+## Stop the project safely
+
+Stop in this order so that no message or database write is cut in the middle.
+
+**1. Stop the apps.** In each of the 11 PowerShell windows press `Ctrl+C` (answer `Y` if PowerShell asks "Terminate batch job"), then close the window. Do not just power off the laptop.
+
+**2. Stop the infrastructure.** From the project root:
+
+```powershell
+docker compose stop
+```
+
+This stops the containers and **keeps all data** (users, cakes, orders, wallets). Next time use `docker compose up -d mysql redis rabbitmq mailpit` again.
+
+| Command | What it does | Data |
+|---|---|---|
+| `docker compose stop` | Stops containers | Kept |
+| `docker compose down` | Stops and removes containers | Kept (volumes stay) |
+| `docker compose down -v` | Stops and removes containers **and volumes** | **DELETED** (databases are empty afterwards) |
+
+Only use `down -v` when you really want a clean start. After it you must run the setup again (`prisma migrate`, `npm run seed` for admin and cakes).
+
+**3. Check that nothing is left running:**
+
+```powershell
+docker compose ps
+```
+
+The list should be empty (or show everything as exited).
+
+## Recent updates
+
+### Refund fix and customer wallet (November 2026)
+
+- **Bug fix:** a delivered order can no longer be refunded.
+  The payment service listens to the `OrderStatusChanged` event; when the status is `DELIVERED` it marks the payment `orderDelivered`.
+  `POST /api/payments/orders/:orderId/refund` then answers HTTP 409, and the admin app hides the Refund button
+  (payment responses now contain a `refundable` flag).
+- **Customer wallet (mock):** every refund is credited to the customer's wallet in the same database transaction as the refund itself,
+  so the payment is never refunded without the wallet being credited (and one payment is credited only once).
+  - API: `GET /api/payments/wallet` (balance) and `GET /api/payments/wallet/transactions` (history). A customer can only see their own wallet.
+  - Database (`cake_payment_db`): new tables `wallets` and `wallet_transactions`, new column `payments.orderDelivered`
+    (migration `add_wallet_and_delivered_flag`).
+  - Customer app: new **Wallet** page and navigation link.
+  - The refund email now says the amount was added to the wallet.
+  - The wallet is only credited by refunds for now. Paying at checkout with the wallet is not implemented yet.
+- **Tests:** payment-service 57 passed, notification-service 31 passed (run on the author's machine).
+- Details: `docs/api-documentation/API.md`, `docs/api-documentation/EVENTS.md`, `database/documentation/DATABASE.md`.
+
+
+
+
 
 ## Useful URLs (local)
 
