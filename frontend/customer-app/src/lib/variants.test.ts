@@ -1,5 +1,5 @@
 import { Variant } from './types';
-import { lowestPrice, resolveSelection, weightLabel } from './variants';
+import { cheapestVariant, lowestPrice, resolveSelection, weightLabel } from './variants';
 
 const v = (id: string, flavour: string, weightGrams: number, eggless: boolean, price: string): Variant => ({
   id, cakeId: 'k1', flavour, weightGrams, eggless, price, isActive: true,
@@ -49,6 +49,10 @@ describe('helpers', () => {
   it('finds the lowest price', () => {
     expect(lowestPrice(variants)).toBe('449.00');
     expect(lowestPrice([])).toBeNull();
+  });
+  it('picks the cheapest variant by real price', () => {
+    expect(cheapestVariant(variants)?.id).toBe('4');
+    expect(cheapestVariant([])).toBeNull();
   });
   it('labels weights', () => {
     expect(weightLabel(500)).toBe('500 g');

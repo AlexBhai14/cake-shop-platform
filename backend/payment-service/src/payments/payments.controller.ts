@@ -22,6 +22,12 @@ export class PaymentsController {
     return this.payments.pay(req.user, orderId, dto.scenario ?? 'SUCCESS', corr(req));
   }
 
+  // Pay with the customer's mock wallet balance (the money that came from refunds).
+  @Post('orders/:orderId/pay-with-wallet')
+  payWithWallet(@Req() req: AuthedRequest, @Param('orderId', ParseUUIDPipe) orderId: string) {
+    return this.payments.payWithWallet(req.user, orderId, corr(req));
+  }
+
   @Get('orders/:orderId')
   one(@Req() req: AuthedRequest, @Param('orderId', ParseUUIDPipe) orderId: string) {
     return this.payments.getOne(req.user, orderId);

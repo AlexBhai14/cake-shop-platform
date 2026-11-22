@@ -13,6 +13,7 @@ export interface Variant {
   weightGrams: number;
   eggless: boolean;
   price: string;
+  mrp?: string | null; // crossed-out display price (null = no discount)
   isActive: boolean;
 }
 
@@ -23,6 +24,7 @@ export interface Cake {
   description: string;
   imageUrl: string | null;
   isActive: boolean;
+  discountPercent?: number;
   categoryId: string;
   category?: Category;
   variants: Variant[];

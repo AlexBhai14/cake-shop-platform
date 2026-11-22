@@ -90,6 +90,8 @@ export const paymentsApi = {
   get: async (orderId: string) => (await api.get<Payment>(`/payments/orders/${orderId}`)).data,
   pay: async (orderId: string, scenario: Scenario) =>
     (await api.post<Payment>(`/payments/orders/${orderId}/pay`, { scenario })).data,
+  payWithWallet: async (orderId: string) =>
+    (await api.post<Payment>(`/payments/orders/${orderId}/pay-with-wallet`)).data,
 };
 
 export const walletApi = {

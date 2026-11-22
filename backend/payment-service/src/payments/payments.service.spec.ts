@@ -29,7 +29,11 @@ describe('PaymentsService (MOCK payments)', () => {
         update: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       paymentTransaction: { create: jest.fn(), updateMany: jest.fn() },
-      wallet: { upsert: jest.fn().mockResolvedValue({ id: 'w1', balance: '1847.00' }) },
+      wallet: {
+        upsert: jest.fn().mockResolvedValue({ id: 'w1', balance: '1847.00' }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUnique: jest.fn().mockResolvedValue({ id: 'w1', balance: '653.00' }),
+      },
       walletTransaction: { create: jest.fn() },
       outboxEvent: { create: jest.fn() },
     };
@@ -135,6 +139,61 @@ describe('PaymentsService (MOCK payments)', () => {
       tx.payment.findUnique.mockResolvedValue({ ...pending, status: 'SUCCEEDED', transactions: [] });
       const result = await service.pay(customer, ORDER);
       expect(result.notice).toContain('No real money');
+    });
+  });
+
+  describe('payWithWallet', () => {
+    it('debits the wallet, records a CHARGE and publishes PaymentSucceeded', async () => {
+      tx.payment.findUnique.mockResolvedValue(pending);
+      await service.payWithWallet(customer, ORDER, 'corr');
+      expect(tx.wallet.updateMany).toHaveBeenCalledWith({
+        where: { userId: 'u1', balance: { gte: '1847.00' } },
+        data: { balance: { decrement: '1847.00' } },
+      });
+      expect(tx.walletTransaction.create.mock.calls[0][0].data).toMatchObject({
+        walletId: 'w1', type: 'DEBIT', amount: '1847.00', balanceAfter: '653.00', paymentId: 'p1', reason: 'ORDER_PAYMENT',
+      });
+      expect(tx.paymentTransaction.create.mock.calls[0][0].data).toMatchObject({ type: 'CHARGE', status: 'SUCCEEDED', reason: 'PAID_WITH_WALLET' });
+      expect(tx.payment.update.mock.calls[0][0].data.status).toBe('SUCCEEDED');
+      expect(published()).toEqual(['PaymentSucceeded']);
+    });
+
+    it('rejects when the balance is too small and charges nothing', async () => {
+      tx.payment.findUnique.mockResolvedValue(pending);
+      tx.wallet.updateMany.mockResolvedValue({ count: 0 });
+      await expect(service.payWithWallet(customer, ORDER, 'corr')).rejects.toThrow('Not enough balance');
+      expect(tx.walletTransaction.create).not.toHaveBeenCalled();
+      expect(tx.payment.update).not.toHaveBeenCalled();
+      expect(published()).toEqual([]);
+    });
+
+    it('is idempotent: an already paid payment is NOT charged again', async () => {
+      tx.payment.findUnique.mockResolvedValue({ ...pending, status: 'SUCCEEDED' });
+      await service.payWithWallet(customer, ORDER, 'corr');
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(tx.wallet.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when another request already claimed the payment', async () => {
+      tx.payment.findUnique.mockResolvedValue(pending);
+      tx.payment.updateMany.mockResolvedValue({ count: 0 });
+      await service.payWithWallet(customer, ORDER, 'corr');
+      expect(tx.wallet.updateMany).not.toHaveBeenCalled();
+    });
+
+    it("refuses to pay another customer's order", async () => {
+      tx.payment.findUnique.mockResolvedValue(pending);
+      await expect(service.payWithWallet(other, ORDER)).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('refuses to pay a cancelled order', async () => {
+      tx.payment.findUnique.mockResolvedValue({ ...pending, status: 'CANCELLED' });
+      await expect(service.payWithWallet(customer, ORDER)).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('returns 404 when no payment exists yet', async () => {
+      tx.payment.findUnique.mockResolvedValue(null);
+      await expect(service.payWithWallet(customer, ORDER)).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 

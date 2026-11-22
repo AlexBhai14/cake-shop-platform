@@ -1,4 +1,4 @@
-import { creditWallet, WalletService } from './wallet.service';
+import { creditWallet, debitWallet, WalletService } from './wallet.service';
 
 describe('Wallet (MOCK)', () => {
   describe('creditWallet', () => {
@@ -12,6 +12,32 @@ describe('Wallet (MOCK)', () => {
       expect(tx.walletTransaction.create.mock.calls[0][0].data).toMatchObject({
         walletId: 'w1', type: 'CREDIT', amount: '650.00', balanceAfter: '2500.00', paymentId: 'p1',
       });
+    });
+  });
+
+  describe('debitWallet', () => {
+    const input = { userId: 'u1', amount: '650.00', orderId: 'o1', paymentId: 'p1', reason: 'ORDER_PAYMENT' };
+
+    it('subtracts only if the balance is enough (one atomic statement) and records a DEBIT line', async () => {
+      const tx: any = {
+        wallet: { updateMany: jest.fn().mockResolvedValue({ count: 1 }), findUnique: jest.fn().mockResolvedValue({ id: 'w1', balance: '350.00' }) },
+        walletTransaction: { create: jest.fn() },
+      };
+      await debitWallet(tx, input);
+      expect(tx.wallet.updateMany).toHaveBeenCalledWith({
+        where: { userId: 'u1', balance: { gte: '650.00' } },
+        data: { balance: { decrement: '650.00' } },
+      });
+      expect(tx.walletTransaction.create.mock.calls[0][0].data).toMatchObject({ type: 'DEBIT', amount: '650.00', balanceAfter: '350.00' });
+    });
+
+    it('throws and records nothing when the balance is too small (or there is no wallet)', async () => {
+      const tx: any = {
+        wallet: { updateMany: jest.fn().mockResolvedValue({ count: 0 }), findUnique: jest.fn() },
+        walletTransaction: { create: jest.fn() },
+      };
+      await expect(debitWallet(tx, input)).rejects.toThrow('Not enough balance');
+      expect(tx.walletTransaction.create).not.toHaveBeenCalled();
     });
   });
 

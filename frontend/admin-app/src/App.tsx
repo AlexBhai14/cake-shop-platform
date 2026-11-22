@@ -6,7 +6,6 @@ import { CakesPage } from './pages/CakesPage';
 import { CategoriesPage } from './pages/CategoriesPage';
 import { CustomersPage } from './pages/CustomersPage';
 import { DashboardPage } from './pages/DashboardPage';
-import { EmailsPage } from './pages/EmailsPage';
 import { InventoryPage } from './pages/InventoryPage';
 import { LoginPage } from './pages/LoginPage';
 import { OrderDetailPage } from './pages/OrderDetailPage';
@@ -27,7 +26,6 @@ export default function App() {
         <Route path="inventory" element={<InventoryPage />} />
         <Route path="customers" element={<CustomersPage />} />
         <Route path="payments" element={<PaymentsPage />} />
-        <Route path="emails" element={<EmailsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

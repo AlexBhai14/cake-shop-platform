@@ -1,6 +1,6 @@
 import { api } from '../lib/api';
 import {
-  AdminOrder, AdminPayment, AdminUser, Cake, NotificationRow, SlotRow, Stats, StockItem, StockMovement, VariantInput,
+  AdminOrder, AdminPayment, AdminUser, Cake, SlotRow, Stats, StockItem, StockMovement, VariantInput,
 } from '../lib/types';
 import { Category, OrderStatus, Page, Profile } from '../lib/shared-types';
 
@@ -34,9 +34,9 @@ export const catalogApi = {
     (await api.patch<Category>(`/categories/${id}`, data)).data,
   cakes: async (page: number, limit = 100) =>
     (await api.get<Page<Cake>>('/cakes/admin/all', { params: { page, limit } })).data,
-  createCake: async (data: { name: string; description: string; categoryId: string; imageUrl?: string; variants: VariantInput[] }) =>
+  createCake: async (data: { name: string; description: string; categoryId: string; imageUrl?: string; discountPercent?: number; variants: VariantInput[] }) =>
     (await api.post<Cake>('/cakes', data)).data,
-  updateCake: async (id: string, data: { name?: string; description?: string; categoryId?: string; imageUrl?: string; isActive?: boolean }) =>
+  updateCake: async (id: string, data: { name?: string; description?: string; categoryId?: string; imageUrl?: string; discountPercent?: number; isActive?: boolean }) =>
     (await api.patch<Cake>(`/cakes/${id}`, data)).data,
   addVariant: async (cakeId: string, data: VariantInput) => (await api.post(`/cakes/${cakeId}/variants`, data)).data,
   updateVariant: async (id: string, data: { price?: number; isActive?: boolean }) =>
@@ -69,9 +69,4 @@ export const paymentsApi = {
     (await api.get<Page<AdminPayment> & { notice: string }>('/payments/admin/all', { params: { page, limit } })).data,
   get: async (orderId: string) => (await api.get<AdminPayment>(`/payments/orders/${orderId}`)).data,
   refund: async (orderId: string) => (await api.post<AdminPayment>(`/payments/orders/${orderId}/refund`)).data,
-};
-
-export const notificationsApi = {
-  list: async (params: { status?: string; page?: number; limit?: number }) =>
-    (await api.get<Page<NotificationRow>>('/notifications/admin/all', { params })).data,
 };

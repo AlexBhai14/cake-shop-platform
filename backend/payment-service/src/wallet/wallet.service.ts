@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 // Credits a refund to the customer's wallet.
@@ -19,6 +19,34 @@ export async function creditWallet(
       walletId: wallet.id,
       type: 'CREDIT',
       amount: input.amount.toString(),
+      balanceAfter: wallet.balance,
+      orderId: input.orderId,
+      paymentId: input.paymentId,
+      reason: input.reason,
+    },
+  });
+  return wallet;
+}
+
+// Takes money from the wallet to pay for an order. Also runs INSIDE the caller's transaction.
+// The balance check and the subtraction are ONE database statement ("only if balance >= amount"),
+// so two payments at the same moment can never spend the same money twice.
+export async function debitWallet(
+  tx: any,
+  input: { userId: string; amount: { toString(): string } | string; orderId: string; paymentId: string; reason: string },
+) {
+  const amount = input.amount.toString();
+  const done = await tx.wallet.updateMany({
+    where: { userId: input.userId, balance: { gte: amount } },
+    data: { balance: { decrement: amount } },
+  });
+  if (done.count === 0) throw new BadRequestException('Not enough balance in your wallet');
+  const wallet = await tx.wallet.findUnique({ where: { userId: input.userId } });
+  await tx.walletTransaction.create({
+    data: {
+      walletId: wallet.id,
+      type: 'DEBIT',
+      amount,
       balanceAfter: wallet.balance,
       orderId: input.orderId,
       paymentId: input.paymentId,

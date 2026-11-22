@@ -31,7 +31,7 @@ Rules followed: UUID ids, timestamps in UTC, money (later services) as DECIMAL, 
 ## cake_product_db (implemented)
 
 - **categories**: `id` UUID, `name` UNIQUE, `slug` UNIQUE, `description`, `isActive`.
-- **cakes**: `id` UUID, `categoryId` FK to categories, `name`, `slug` UNIQUE, `description`, `imageUrl`, `isActive` (soft delete).
+- **cakes**: `id` UUID, `categoryId` FK to categories, `name`, `slug` UNIQUE, `description`, `imageUrl`, `discountPercent` (0 to 90, display only: the shop shows `price / (1 - discount)` crossed out), `isActive` (soft delete).
 - **cake_variants**: `id` UUID, `cakeId` FK to cakes, `flavour`, `weightGrams`, `eggless`, `price` DECIMAL(10,2), `isActive`.
   UNIQUE(`cakeId`, `flavour`, `weightGrams`, `eggless`). A variant is the thing a customer actually buys; the cart and order services store the variant id and a price snapshot.
 
@@ -73,7 +73,7 @@ Run `npx prisma migrate dev --name add_customer_email` in `backend/order-service
 
 - **payments**: `orderId` UNIQUE (one payment per order = natural idempotency), `userId`, `customerEmail`, `amount` DECIMAL(10,2), `status` (PENDING, PROCESSING, SUCCEEDED, FAILED, UNKNOWN, REFUNDED, CANCELLED), `gatewayRef`, `failureReason`, `orderDelivered` (set from the OrderStatusChanged=DELIVERED event; a delivered order cannot be refunded).
 - **wallets**: one row per customer (`userId` UNIQUE), `balance` DECIMAL(10,2). Refunds are credited here.
-- **wallet_transactions**: wallet passbook (CREDIT/DEBIT, amount, balanceAfter, orderId, paymentId). UNIQUE(paymentId, type) so one payment is credited only once.
+- **wallet_transactions**: wallet passbook (CREDIT for refunds, DEBIT when the wallet pays for an order; amount, balanceAfter, orderId, paymentId). UNIQUE(paymentId, type) so one payment is credited only once.
 - **payment_transactions**: every CHARGE and REFUND is a new row (type, amount, status SUCCEEDED/FAILED/UNKNOWN). Rows are never overwritten (except UNKNOWN resolved by reconciliation).
 - **outbox_events**, **processed_events**.
 No card numbers or bank data exist anywhere. This is a simulation.

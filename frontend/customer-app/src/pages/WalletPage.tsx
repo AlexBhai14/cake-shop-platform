@@ -11,6 +11,7 @@ const LIMIT = 20;
 const REASONS: Record<string, string> = {
   ORDER_CANCELLED: 'Refund: order cancelled',
   ADMIN_REFUND: 'Refund by shop',
+  ORDER_PAYMENT: 'Paid for an order',
 };
 
 export function WalletPage() {

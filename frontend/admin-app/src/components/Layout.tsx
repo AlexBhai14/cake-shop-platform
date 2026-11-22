@@ -10,7 +10,6 @@ const LINKS: Array<[string, string]> = [
   ['/inventory', 'Inventory & slots'],
   ['/customers', 'Customers'],
   ['/payments', 'Payments (mock)'],
-  ['/emails', 'Emails'],
 ];
 
 export function Layout() {

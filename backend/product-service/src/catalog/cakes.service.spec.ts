@@ -53,6 +53,15 @@ describe('CakesService', () => {
       expect(arg.data.variants.create).toEqual(dto.variants);
     });
 
+    it('stores the discount percent (0 when not given)', async () => {
+      prisma.category.findUnique.mockResolvedValue({ id: 'c1', isActive: true });
+      prisma.cake.create.mockResolvedValue({ id: 'k1' });
+      await service.create(dto);
+      expect(prisma.cake.create.mock.calls[0][0].data.discountPercent).toBe(0);
+      await service.create({ ...dto, discountPercent: 30 } as any);
+      expect(prisma.cake.create.mock.calls[1][0].data.discountPercent).toBe(30);
+    });
+
     it('maps a unique-constraint error to ConflictException', async () => {
       prisma.category.findUnique.mockResolvedValue({ id: 'c1', isActive: true });
       prisma.cake.create.mockRejectedValue({ code: 'P2002' });
@@ -77,6 +86,32 @@ describe('CakesService', () => {
     it('adds a name search when provided', async () => {
       await service.listPublic({ search: 'velvet' });
       expect(prisma.cake.findMany.mock.calls[0][0].where.name).toEqual({ contains: 'velvet' });
+    });
+  });
+
+  describe('discount display', () => {
+    const cake = { id: 'k1', isActive: true, discountPercent: 30, variants: [{ id: 'v1', price: '70.00' }] };
+
+    it('getPublic adds the crossed-out mrp but keeps the real price', async () => {
+      prisma.cake.findUnique.mockResolvedValue(cake);
+      const r = await service.getPublic('k1');
+      expect(r.variants[0]).toMatchObject({ price: '70.00', mrp: '100.00' });
+    });
+
+    it('listPublic and listAdmin add mrp too', async () => {
+      prisma.cake.findMany.mockResolvedValue([cake]);
+      expect((await service.listPublic({})).items[0].variants[0].mrp).toBe('100.00');
+      expect((await service.listAdmin()).items[0].variants[0].mrp).toBe('100.00');
+    });
+
+    it('getVariant (used by cart and order) exposes ONLY the real price, never the mrp', async () => {
+      prisma.cakeVariant.findUnique.mockResolvedValue({
+        id: 'v1', cakeId: 'k1', flavour: 'Choc', weightGrams: 500, eggless: false, price: '70.00',
+        isActive: true, cake: { id: 'k1', name: 'Truffle', isActive: true },
+      });
+      const v: any = await service.getVariant('v1');
+      expect(v.price).toBe('70.00');
+      expect(v.mrp).toBeUndefined();
     });
   });
 

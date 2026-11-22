@@ -36,10 +36,10 @@ Admin accounts cannot be created through the API. They are provisioned with `npm
 |---|---|---|
 | GET `/categories` | public | Active categories |
 | GET `/cakes?search&categoryId&flavour&eggless&minPrice&maxPrice&page&limit` | public | Active cakes with active variants (max 50 per page) |
-| GET `/cakes/:id` | public | One cake |
+| GET `/cakes/:id` | public | One cake. Each variant has `price` (the real price) and `mrp` (crossed-out display price, `null` without a discount); the cake has `discountPercent` |
 | GET `/variants/:id` | public | Current price and availability of one variant |
 | GET `/categories/admin/all`, POST `/categories`, PATCH `/categories/:id` | ADMIN | Manage categories |
-| GET `/cakes/admin/all?page&limit`, POST `/cakes`, PATCH `/cakes/:id` | ADMIN | Manage cakes (`isActive:false` hides a cake) |
+| GET `/cakes/admin/all?page&limit`, POST `/cakes`, PATCH `/cakes/:id` | ADMIN | Manage cakes (`isActive:false` hides a cake, `discountPercent` 0 to 90 sets the shop discount display) |
 | POST `/cakes/:id/variants`, PATCH `/variants/:id` `{price?, isActive?}` | ADMIN | Variants and prices |
 
 Create cake: `{name, description, categoryId, imageUrl?, variants:[{flavour, weightGrams(100-20000), eggless, price(max 2 decimals)}]}`.
@@ -95,6 +95,7 @@ Stock and slot are reserved afterwards through events: the order may become `CAN
 | POST `/payments/orders/:orderId/pay` `{scenario: SUCCESS, FAILURE or TIMEOUT}` | owner | Simulated payment. Repeating it never charges twice. `TIMEOUT` leaves the status `UNKNOWN` until reconciliation |
 | GET `/payments/admin/all?page&limit` | ADMIN | All payments |
 | POST `/payments/orders/:orderId/refund` | ADMIN | Mock refund of a `SUCCEEDED` payment (only once). The money is credited to the customer's wallet. A `DELIVERED` order returns 409 |
+| POST `/payments/orders/:orderId/pay-with-wallet` | CUSTOMER (own order) | Pays the full amount from the mock wallet. 400 if the balance is too small. Safe to call twice (never charges twice) |
 | GET `/payments/wallet` | CUSTOMER (own wallet) | Wallet balance (`0.00` if no refund yet) |
 | GET `/payments/wallet/transactions?page&limit` | CUSTOMER (own wallet) | Wallet history, newest first |
 

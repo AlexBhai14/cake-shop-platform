@@ -5,7 +5,7 @@ import { PaymentRequestedAlias } from './types';
 import { enqueueEvent } from '../messaging/idempotency';
 import { PrismaService } from '../prisma/prisma.service';
 import { MockGateway, Scenario } from './mock-gateway';
-import { creditWallet } from '../wallet/wallet.service';
+import { creditWallet, debitWallet } from '../wallet/wallet.service';
 
 export interface AuthUser {
   userId: string;
@@ -90,6 +90,30 @@ export class PaymentsService {
         const claimed = await tx.payment.updateMany({ where: { id: payment.id, status: 'PENDING' }, data: { status: 'PROCESSING' } });
         if (claimed.count === 0) return; // another request is already handling it
         await this.settle(tx, payment, scenario, correlationId);
+      });
+    }
+    return this.getOne(user, orderId);
+  }
+
+  // Pay the whole amount from the customer's (mock) wallet. Instant success, no bank involved.
+  // If the balance is too small the transaction is rolled back: the payment stays PENDING and nothing is charged.
+  async payWithWallet(user: AuthUser, orderId: string, correlationId: string = randomUUID()) {
+    const payment = await this.prisma.payment.findUnique({ where: { orderId } });
+    if (!payment) throw new NotFoundException('No payment is waiting for this order yet. Try again in a moment.');
+    if (payment.userId !== user.userId) throw new ForbiddenException('You cannot pay for this order');
+    if (payment.status === 'CANCELLED') throw new ConflictException('This order was cancelled');
+
+    // Idempotent like pay(): a second click never charges the wallet twice.
+    if (payment.status === 'PENDING') {
+      await this.prisma.$transaction(async (tx) => {
+        const claimed = await tx.payment.updateMany({ where: { id: payment.id, status: 'PENDING' }, data: { status: 'PROCESSING' } });
+        if (claimed.count === 0) return; // another request is already handling it
+        await debitWallet(tx, { userId: payment.userId, amount: payment.amount, orderId, paymentId: payment.id, reason: 'ORDER_PAYMENT' });
+        await tx.paymentTransaction.create({
+          data: { paymentId: payment.id, type: 'CHARGE', amount: payment.amount, status: 'SUCCEEDED', gatewayRef: `wallet_${randomUUID()}`, reason: 'PAID_WITH_WALLET' },
+        });
+        await tx.payment.update({ where: { id: payment.id }, data: { status: 'SUCCEEDED' } });
+        await enqueueEvent(tx, 'PaymentSucceeded', { orderId, paymentId: payment.id }, correlationId);
       });
     }
     return this.getOne(user, orderId);

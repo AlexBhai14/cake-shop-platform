@@ -1,11 +1,11 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ordersApi, paymentsApi } from '../api/endpoints';
+import { ordersApi, paymentsApi, walletApi } from '../api/endpoints';
 import { ErrorBox, Loading, Notice, PageTitle } from '../components/ui';
 import { usePolling } from '../hooks/usePolling';
 import { getErrorMessage, statusOf } from '../lib/api';
 import { formatINR } from '../lib/money';
-import { Payment, Scenario } from '../lib/types';
+import { Payment, Scenario, Wallet } from '../lib/types';
 
 // The MOCK payment page. The three buttons tell the simulated bank what to do.
 export function PaymentPage() {
@@ -13,7 +13,8 @@ export function PaymentPage() {
   const navigate = useNavigate();
   const [payment, setPayment] = useState<Payment | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [paying, setPaying] = useState<Scenario | null>(null);
+  const [paying, setPaying] = useState<Scenario | 'WALLET' | null>(null);
+  const [wallet, setWallet] = useState<Wallet | null>(null);
 
   // Follow the order: stock reservation and payment creation happen in the background (RabbitMQ events)
   const load = useCallback(async () => {
@@ -35,6 +36,16 @@ export function PaymentPage() {
 
   usePolling(load, 2000);
 
+  // The wallet balance is only shown to help the customer; the server checks the balance again when paying.
+  const loadWallet = useCallback(async () => {
+    try {
+      setWallet(await walletApi.get());
+    } catch {
+      setWallet(null); // the wallet is optional: the bank buttons still work
+    }
+  }, []);
+  useEffect(() => void loadWallet(), [loadWallet]);
+
   const pay = async (scenario: Scenario) => {
     setPaying(scenario);
     setError(null);
@@ -46,6 +57,21 @@ export function PaymentPage() {
       setPaying(null);
     }
   };
+
+  const payWithWallet = async () => {
+    setPaying('WALLET');
+    setError(null);
+    try {
+      setPayment(await paymentsApi.payWithWallet(id));
+      void loadWallet();
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setPaying(null);
+    }
+  };
+
+  const walletEnough = !!(wallet && payment && Number(wallet.balance) >= Number(payment.amount));
 
   const waitingForResult = payment && (payment.status === 'PROCESSING' || payment.status === 'UNKNOWN');
 
@@ -65,6 +91,19 @@ export function PaymentPage() {
         <div className="card space-y-4">
           <p className="text-sm text-gray-500">Amount to pay</p>
           <p className="text-4xl font-extrabold text-rose-700">{formatINR(payment.amount)}</p>
+          {wallet && Number(wallet.balance) > 0 && (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-3">
+              <p className="text-sm">
+                Wallet balance: <strong>{formatINR(wallet.balance)}</strong>
+              </p>
+              <button className="btn-primary mt-2 w-full py-3" disabled={!!paying || !walletEnough} onClick={() => void payWithWallet()}>
+                {paying === 'WALLET' ? 'Processing...' : `Pay ${formatINR(payment.amount)} with wallet`}
+              </button>
+              {!walletEnough && (
+                <p className="mt-2 text-xs text-gray-600">Your wallet balance is less than the order amount. Use the simulated bank below.</p>
+              )}
+            </div>
+          )}
           <p className="text-sm text-gray-600">Choose what the simulated bank should do:</p>
           <div className="grid gap-3">
             <button className="btn-primary py-3" disabled={!!paying} onClick={() => void pay('SUCCESS')}>

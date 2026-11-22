@@ -7,6 +7,7 @@ import {
   UpdateVariantDto,
   VariantDto,
 } from './dto/cake.dto';
+import { withMrp } from './pricing.util';
 import { isUniqueViolation, slugify } from './slug.util';
 
 @Injectable()
@@ -42,7 +43,7 @@ export class CakesService {
       }),
       this.prisma.cake.count({ where }),
     ]);
-    return { items, total, page, limit };
+    return { items: items.map(withMrp), total, page, limit };
   }
 
   async getPublic(id: string) {
@@ -51,7 +52,7 @@ export class CakesService {
       include: { category: true, variants: { where: { isActive: true }, orderBy: { price: 'asc' } } },
     });
     if (!cake || !cake.isActive) throw new NotFoundException('Cake not found');
-    return cake;
+    return withMrp(cake);
   }
 
   // Admin: everything, including inactive cakes and variants.
@@ -65,7 +66,7 @@ export class CakesService {
       }),
       this.prisma.cake.count(),
     ]);
-    return { items, total, page, limit };
+    return { items: items.map(withMrp), total, page, limit };
   }
 
   // Used by the cart/order services to check the CURRENT price (never trust a client price).
@@ -98,6 +99,7 @@ export class CakesService {
           description: dto.description,
           categoryId: dto.categoryId,
           imageUrl: dto.imageUrl,
+          discountPercent: dto.discountPercent ?? 0,
           variants: { create: dto.variants },
         },
         include: { variants: true },

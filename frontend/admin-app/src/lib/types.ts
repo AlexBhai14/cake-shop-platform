@@ -8,6 +8,7 @@ export interface Variant {
   weightGrams: number;
   eggless: boolean;
   price: string;
+  mrp?: string | null;
   isActive: boolean;
 }
 
@@ -18,6 +19,7 @@ export interface Cake {
   description: string;
   imageUrl: string | null;
   isActive: boolean;
+  discountPercent?: number;
   categoryId: string;
   category?: { id: string; name: string };
   variants: Variant[];
@@ -117,15 +119,3 @@ export interface AdminPayment {
   notice?: string;
 }
 
-export interface NotificationRow {
-  id: string;
-  orderId: string | null;
-  type: string;
-  subject: string;
-  status: 'PENDING' | 'SENT' | 'FAILED';
-  toEmail: string;
-  attempts: number;
-  lastError: string | null;
-  createdAt: string;
-  sentAt: string | null;
-}

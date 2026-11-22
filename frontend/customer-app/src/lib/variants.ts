@@ -42,3 +42,9 @@ export function resolveSelection(vs: Variant[], sel: Selection) {
       : undefined;
   return { flavours, flavour, weights, weight, types, eggless, variant };
 }
+
+// The variant with the lowest real price (its crossed-out mrp, if any, comes along).
+export function cheapestVariant(vs: Variant[]): Variant | null {
+  if (vs.length === 0) return null;
+  return vs.reduce((min, v) => (Number(v.price) < Number(min.price) ? v : min), vs[0]);
+}

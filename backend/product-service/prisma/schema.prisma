@@ -28,6 +28,9 @@ model Cake {
   slug        String        @unique @db.VarChar(170)
   description String        @db.Text
   imageUrl    String?       @db.VarChar(500)
+  // Shop display only: the shop shows a crossed-out price (selling price / (1 - discount)) and "X% OFF".
+  // The customer is ALWAYS charged the real variant price, never the crossed-out one.
+  discountPercent Int       @default(0)
   isActive    Boolean       @default(true)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt

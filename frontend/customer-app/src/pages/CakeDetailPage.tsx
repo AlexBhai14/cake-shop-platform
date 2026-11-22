@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { cartApi, catalogApi } from '../api/endpoints';
-import { ErrorBox, Loading, Notice } from '../components/ui';
+import { ErrorBox, Loading, Notice, PriceTag } from '../components/ui';
 import { useCart } from '../context/CartContext';
 import { useAsync } from '../hooks/useAsync';
 import { useAuth } from '../hooks/useAuth';
 import { getErrorMessage } from '../lib/api';
-import { formatINR } from '../lib/money';
 import { resolveSelection, Selection, weightLabel } from '../lib/variants';
 
 export function CakeDetailPage() {
@@ -99,7 +98,7 @@ export function CakeDetailPage() {
                 <label className="label" htmlFor="v-qty">Quantity</label>
                 <input id="v-qty" type="number" min={1} max={20} className="input w-24" value={quantity} onChange={(e) => setQuantity(Math.min(20, Math.max(1, Number(e.target.value) || 1)))} />
               </div>
-              <p className="text-3xl font-extrabold text-rose-700">{r.variant ? formatINR(r.variant.price) : '-'}</p>
+              <p>{r.variant ? <PriceTag size="lg" price={r.variant.price} mrp={r.variant.mrp} discountPercent={c.discountPercent} /> : '-'}</p>
             </div>
 
             {error && <ErrorBox message={error} />}

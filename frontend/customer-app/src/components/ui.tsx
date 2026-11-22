@@ -1,3 +1,4 @@
+import { formatINR } from '../lib/money';
 import { ReactNode } from 'react';
 import { OrderStatus } from '../lib/types';
 import { STATUS_LABEL, statusTone, Tone } from '../lib/orders';
@@ -51,4 +52,24 @@ export function StatusBadge({ status }: { status: OrderStatus }) {
 
 export function PageTitle({ children }: { children: ReactNode }) {
   return <h1 className="mb-6 text-2xl font-bold text-gray-900">{children}</h1>;
+}
+
+// Crossed-out price + "X% OFF" + the real price. Shows only the real price when there is no discount.
+export function PriceTag({ price, mrp, discountPercent, size = 'md' }: { price: string; mrp?: string | null; discountPercent?: number; size?: 'md' | 'lg' }) {
+  const big = size === 'lg';
+  return (
+    <span className="inline-flex flex-wrap items-baseline gap-x-2">
+      {mrp && (
+        <span className={`${big ? 'text-lg' : 'text-sm'} text-gray-400 line-through`} aria-label="Original price">
+          {formatINR(mrp)}
+        </span>
+      )}
+      <span className={`${big ? 'text-3xl font-extrabold' : 'text-sm font-bold'} text-rose-700`}>{formatINR(price)}</span>
+      {mrp && !!discountPercent && (
+        <span className={`${big ? 'text-sm' : 'text-xs'} rounded bg-green-100 px-1.5 py-0.5 font-semibold text-green-700`}>
+          {discountPercent}% OFF
+        </span>
+      )}
+    </span>
+  );
 }

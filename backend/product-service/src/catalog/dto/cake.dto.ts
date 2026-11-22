@@ -52,6 +52,12 @@ export class CreateCakeDto {
   @MaxLength(500)
   imageUrl?: string;
 
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(90)
+  discountPercent?: number;
+
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
@@ -79,6 +85,12 @@ export class UpdateCakeDto {
   @IsString()
   @MaxLength(500)
   imageUrl?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(90)
+  discountPercent?: number;
 
   @IsOptional()
   @IsBoolean()
