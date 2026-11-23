@@ -1,28 +1,18 @@
-# SETUP GUIDE: Batch 8 (Monitoring, Integration and E2E tests, Kubernetes)
+# SETUP: tests, monitoring, end-to-end tests, Kubernetes and CI/CD
 
-Extract this zip into `D:\Sahil_Code\Project\Cake\cake-shop-platform` (merge, replace when asked).
-The folder `_tpl` in the zip is only a template folder; you may delete it.
+This guide starts where `RUN_ME_FIRST.md` ends. Everything here is optional for running the shop, but it is what makes the project cloud-native.
+Run the commands from the project root unless a step says otherwise, one command at a time, and check the output before you continue.
 
-Replaced files: `docker-compose.yml`, `.env.example`, and in EVERY backend service `package.json` and `src/app.module.ts`
-(each service got a `/metrics` endpoint). New: `src/metrics/*` in every service, `backend/inventory-service/test/` and `jest.int.config.js`,
-`infrastructure/monitoring`, `infrastructure/rabbitmq`, `infrastructure/kubernetes`, `scripts/*.ps1`, `tests/e2e`, three learning notes in `docs/learning-notes`.
-There are NO database changes in this batch.
+## Part A: unit tests of every service
 
-IMPORTANT: written but not executed by me (no internet in my build environment). Send me any error in full.
-
-## Part A: metrics in every service
-
-In EACH of the 9 backend folders run (then restart the service with `npm run start:dev`):
+In EACH of the 9 backend folders and in both React apps run:
 
 ```powershell
 npm install
 npm test
 ```
 
-Expected number of passing test suites: api-gateway 7, auth-service 4, user-service 3, product-service 3, cart-service 3,
-inventory-service 6, order-service 8, payment-service 6, notification-service 6.
-
-Check one service: http://localhost:3001/metrics shows text lines such as `http_requests_total` and `process_cpu_user_seconds_total`.
+Every suite must pass. Check one service's metrics after it is running: http://localhost:3001/metrics shows lines such as `http_requests_total`.
 
 ## Part B: integration test with a real MySQL (Testcontainers)
 
@@ -33,30 +23,29 @@ cd backend\inventory-service
 npm run test:int
 ```
 
-Expected: 1 suite, 5 tests pass: 20 customers race for 5 cakes and exactly 5 win, slot capacity under concurrency, rollback of a failed reservation, idempotent reservation, confirm and release.
+Expected: 20 customers race for 5 cakes and exactly 5 win, slot capacity holds under concurrency, a failed reservation is rolled back, reservations are idempotent, confirm and release work.
 This is the test that proves the "no overselling" rule with a real database.
 
 ## Part C: monitoring (Prometheus and Grafana)
 
-1. Add this line to the root `.env` (the file you copied from `.env.example`):
+1. Make sure the root `.env` contains:
 
 ```
 GRAFANA_ADMIN_PASSWORD=ChangeMeGrafana123
 ```
 
-2. Start the monitoring containers. RabbitMQ is recreated once to enable its Prometheus plugin (its data volume is kept; the services reconnect by themselves):
+2. Start the monitoring containers. RabbitMQ is recreated once to enable its Prometheus plugin (its data volume is kept):
 
 ```powershell
 docker compose up -d rabbitmq prometheus grafana
 ```
 
-3. Open Prometheus: http://localhost:9090/targets
-   Every service that is running shows UP (they run on your PC, Prometheus reaches them through `host.docker.internal`). RabbitMQ shows UP too.
+3. Open Prometheus: http://localhost:9090/targets. Every service that is running shows UP (they run on your PC; Prometheus reaches them through `host.docker.internal`). RabbitMQ shows UP too.
    If all your services run as Docker containers, set `PROMETHEUS_CONFIG=./infrastructure/monitoring/prometheus/prometheus.yml` in `.env` and run the command again.
 4. Open Grafana: http://localhost:3030 (user `admin`, password from `.env`). Dashboards > Cake Shop > Cake Shop Overview.
-5. Make traffic: use the customer app, or run the E2E tests (Part D). Watch the request rate, latency and orders per minute move.
-6. Alerts: http://localhost:9090/alerts . Stop the order service (Ctrl+C). After about one minute `ServiceDown` is FIRING. Start it again and the alert clears.
-7. Saga health: stop RabbitMQ (`docker stop cake-rabbitmq`), place an order in the customer app, and watch `outbox_pending_events` grow in Grafana. Start RabbitMQ again: the number drops to 0 and the order continues. No event was lost. This is the transactional outbox at work.
+5. Make traffic with the customer app or the end-to-end tests (Part D) and watch the request rate, latency and orders per minute move.
+6. Alerts: http://localhost:9090/alerts. Stop the order service (`Ctrl+C`). After about one minute `ServiceDown` is FIRING. Start it again and the alert clears.
+7. Saga health: stop RabbitMQ (`docker stop cake-rabbitmq`), place an order, and watch `outbox_pending_events` grow in Grafana. Start RabbitMQ again: the number drops to 0 and the order continues. No event is lost. This is the transactional outbox at work.
 
 ## Part D: end-to-end tests (the whole system through the gateway)
 
@@ -81,9 +70,7 @@ npm install
 npm test
 ```
 
-Edit `.env` first: admin email and password, and `E2E_LOGIN_LIMIT=1000`.
-
-Expected: 5 suites pass (auth, authorization, catalog, checkout, notifications), roughly 45 tests, in 2 to 4 minutes.
+Edit `tests\e2e\.env` first: admin email and password, and `E2E_LOGIN_LIMIT=1000`.
 The checkout suite runs the saga for real: happy path, idempotency, price snapshot, failed payment, out of stock, full slot, refund, admin cancel.
 
 The slow test (about 1 minute, simulates a bank timeout and the reconciliation job):
@@ -98,15 +85,17 @@ The rate-limit test: restore the DEFAULT limits in the gateway `.env` (remove th
 npm run test:ratelimit
 ```
 
-Expected: 2 tests pass (a 429 with Retry-After appears after the 5th wrong login).
-
+Expected: a 429 with `Retry-After` appears after the 5th wrong login.
 The tests leave some data behind (deactivated E2E cakes and categories, a few unpaid orders that the system cancels by itself after 15 minutes). That is harmless.
 
 ## Part E: Kubernetes (Docker Desktop cluster)
 
-Read `docs/learning-notes/KUBERNETES.md` first (10 minutes).
+Read `docs/learning-notes/KUBERNETES.md` first (10 minutes). The manifests are in `infrastructure/kubernetes` (Kustomize: `base` plus the `local` overlay).
 
-0. Memory: Docker Desktop > Settings > Resources: set Memory to at least 8 GB (your docker info showed 3.7 GB, which is too small for 11 services plus MySQL and RabbitMQ). Apply and restart. Also stop the services that run on your PC and the compose apps, to free the ports and memory (keep Docker Desktop and Kubernetes running).
+**Why:** self-healing (a crashed pod is replaced), rolling updates without downtime (the new pod must be ready before the old one stops) with a one-command rollback,
+scaling, and configuration and secrets kept outside the images. **Cost:** more memory and more moving parts than Docker Compose.
+
+0. Memory: Docker Desktop > Settings > Resources: Memory at least 8 GB. Enable Kubernetes in Docker Desktop (Settings > Kubernetes). Stop the services that run on your PC and the compose apps, to free the ports and memory (keep Docker Desktop and Kubernetes running).
 1. Check the cluster:
 
 ```powershell
@@ -126,7 +115,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build-images.ps1
 powershell -ExecutionPolicy Bypass -File scripts\load-images-to-k8s.ps1
 ```
 
-If the node name is not `desktop-control-plane`, pass it: `-Node <name>` (it is the name in `kubectl get nodes`).
+If the node name is not `desktop-control-plane`, pass it: `-Node <name>` (the name shown by `kubectl get nodes`).
 
 4. Create the Secret from your `.env` (passwords never enter Git):
 
@@ -141,7 +130,8 @@ kubectl apply -k infrastructure/kubernetes/overlays/local
 kubectl get pods -n cake-shop -w
 ```
 
-Stop watching with Ctrl+C when every pod is `1/1 Running`. MySQL starts first and creates the 8 databases; services stay "not ready" until it is up (probes!). Each service applies its own Prisma migrations at start (the images contain your `prisma/migrations` folders).
+Stop watching with `Ctrl+C` when every pod is `1/1 Running`. MySQL starts first and creates the 8 databases; services stay "not ready" until it is up (probes).
+Each service applies its own Prisma migrations when it starts (the images contain the `prisma/migrations` folders, so they must be committed).
 If a pod is not ready: `kubectl describe pod <name> -n cake-shop` and `kubectl logs <name> -n cake-shop`.
 
 6. Create the admin and the demo cakes in the cluster database. Open a SECOND PowerShell window and keep this running:
@@ -172,7 +162,7 @@ kubectl port-forward -n cake-shop svc/admin-app 5174:80
 kubectl port-forward -n cake-shop svc/mailpit 8026:8025
 ```
 
-Customer app http://localhost:5173, admin app http://localhost:5174, emails http://localhost:8026. Place an order, pay (simulated), and watch the emails arrive.
+Customer app http://localhost:5173, admin app http://localhost:5174, emails http://localhost:8026.
 (The React apps were built with the API address http://localhost:3000, so keep the gateway forward on port 3000.)
 
 8. Experiments (this is where you learn Kubernetes):
@@ -184,7 +174,7 @@ kubectl delete pod -n cake-shop -l app=order-service
 kubectl get pods -n cake-shop -w
 ```
 
-A BAD rolling update that Kubernetes protects you from (maxUnavailable 0: the old pod keeps serving) and the rollback:
+A BAD rolling update that Kubernetes protects you from (the old pod keeps serving) and the rollback:
 
 ```powershell
 kubectl set image deployment/customer-app customer-app=cake-customer-app:broken -n cake-shop
@@ -192,7 +182,7 @@ kubectl get pods -n cake-shop
 kubectl rollout status deployment/customer-app -n cake-shop --timeout=30s
 ```
 
-The new pod shows `ErrImagePull`/`ImagePullBackOff`, but http://localhost:5173 still works (the old pod is still Ready). Go back:
+The new pod shows `ErrImagePull` or `ImagePullBackOff`, but http://localhost:5173 still works. Go back:
 
 ```powershell
 kubectl rollout undo deployment/customer-app -n cake-shop
@@ -233,15 +223,30 @@ kubectl get hpa -n cake-shop
 kubectl delete namespace cake-shop
 ```
 
-## Commit
+## Part F: updating the cluster after you change the code
+
+Docker Desktop's cluster has its own image store, so after a code change you rebuild, load and restart:
 
 ```powershell
-git status
-git add docker-compose.yml .env.example backend infrastructure scripts tests docs SETUP_BATCH8.md
-git status
-git commit -m "feat(ops): add prometheus metrics, grafana, e2e and integration tests, kubernetes manifests"
-git log --oneline
-git push
+powershell -ExecutionPolicy Bypass -File scripts\build-images.ps1
+powershell -ExecutionPolicy Bypass -File scripts\load-images-to-k8s.ps1
+kubectl rollout restart deployment -n cake-shop
+kubectl rollout status deployment/order-service -n cake-shop
 ```
 
-Make sure `git status` shows no `.env`, `node_modules`, `dist` or `coverage` before you commit.
+A new Prisma migration is applied automatically when the service pod starts (`prisma migrate deploy`). If something goes wrong: `kubectl rollout undo deployment/<name> -n cake-shop`.
+
+## Part G: CI/CD with GitHub Actions
+
+The pipeline already exists in `.github/workflows/ci-cd.yml` (lint, tests, build and push 11 Docker images, approved deployment, smoke test, automatic rollback) and `e2e.yml` (nightly end-to-end run).
+Before it can deploy, set up (full details and security notes in `docs/ci-cd/CI_CD.md`):
+
+1. The `package-lock.json` files and the `prisma/migrations` folders are committed.
+2. A Docker Hub access token (Read and Write).
+3. GitHub secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
+4. A GitHub environment named `production` with yourself as required reviewer.
+5. For the Docker Desktop cluster: a self-hosted runner on your PC and the repository variable `DEPLOY_RUNNER=self-hosted`. A self-hosted runner executes workflow code on your PC, so read the security warning in `docs/ci-cd/CI_CD.md`.
+6. The Kubernetes Secret created once with `scripts\create-k8s-secret.ps1` (the pipeline never sees your passwords).
+7. Optional: branch protection on `main` that requires the checks to pass.
+
+Untested code is never deployed: `publish` needs all test jobs, `deploy` needs `publish`, and `deploy` additionally needs your approval.
