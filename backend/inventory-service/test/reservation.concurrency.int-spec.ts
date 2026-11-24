@@ -20,16 +20,34 @@ describe('ReservationService against a real MySQL (Testcontainers)', () => {
     deliveryDate: date, deliverySlot: slot, totalAmount: '100.00', currency: 'INR',
   });
 
-  const reserve = (service: ReservationService, data: ReturnType<typeof order>) =>
-    prisma.$transaction((tx) => service.reserve(tx, data), { maxWait: 30000, timeout: 60000 });
+  // MySQL can abort one of many concurrent transactions with a deadlock. The inventory saga retries such technical errors
+  // (retry queue), so the test does the same: only a CAPACITY decision (InsufficientCapacityError) is a final answer.
+  const isDeadlock = (e: any) =>
+    e?.code === 'P2034' || (e?.code === 'P2010' && /1213|1205|deadlock|lock wait timeout/i.test(String(e?.message)));
 
+  const reserve = async (service: ReservationService, data: ReturnType<typeof order>) => {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await prisma.$transaction((tx) => service.reserve(tx, data), { maxWait: 30000, timeout: 60000 });
+      } catch (e) {
+        if (!isDeadlock(e) || attempt >= 10) throw e;
+      }
+    }
+  };
+
+  // Short reason of a lost reservation (shows the real error text in the test output if it is not a capacity decision).
+  const why = (r: PromiseRejectedResult) =>
+    r.reason instanceof InsufficientCapacityError ? r.reason.reason : String(r.reason?.message ?? r.reason).split('\n').pop();
   beforeAll(async () => {
     container = await new MySqlContainer('mysql:8.4').start();
     const url = container.getConnectionUri();
+    // Prisma refuses a shadow database that is the same as the main one. "db push" never uses it, so any other name works.
+    const shadowUrl = new URL(url);
+    shadowUrl.pathname = `${shadowUrl.pathname}_shadow`;
     // creates the tables from prisma/schema.prisma in the empty database
     execSync('npx prisma db push --skip-generate', {
       cwd: path.resolve(__dirname, '..'),
-      env: { ...process.env, DATABASE_URL: url, SHADOW_DATABASE_URL: url },
+      env: { ...process.env, DATABASE_URL: url, SHADOW_DATABASE_URL: shadowUrl.toString() },
       stdio: 'inherit',
     });
     prisma = new PrismaClient({ datasources: { db: { url } } });
@@ -52,8 +70,7 @@ describe('ReservationService against a real MySQL (Testcontainers)', () => {
     const lost = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
     expect(won).toHaveLength(5);
     expect(lost).toHaveLength(15);
-    expect(lost.every((r) => r.reason instanceof InsufficientCapacityError && r.reason.reason === 'OUT_OF_STOCK')).toBe(true);
-
+    expect(lost.map(why)).toEqual(Array(15).fill('OUT_OF_STOCK'));
     const item = await prisma.inventoryItem.findUnique({ where: { variantId } });
     expect(item).toMatchObject({ onHand: 5, reserved: 5 });
   });
@@ -66,8 +83,7 @@ describe('ReservationService against a real MySQL (Testcontainers)', () => {
 
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(3);
     const lost = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
-    expect(lost.every((r) => r.reason instanceof InsufficientCapacityError && r.reason.reason === 'DELIVERY_SLOT_FULL')).toBe(true);
-    const slot = await prisma.slotCapacity.findFirst({ where: { slot: '10:00-12:00', deliveryDate: new Date('2030-02-10T00:00:00.000Z') } });
+    expect(lost.map(why)).toEqual(Array(7).fill('DELIVERY_SLOT_FULL')); const slot = await prisma.slotCapacity.findFirst({ where: { slot: '10:00-12:00', deliveryDate: new Date('2030-02-10T00:00:00.000Z') } });
     expect(slot).toMatchObject({ capacity: 3, booked: 3 });
   });
 
