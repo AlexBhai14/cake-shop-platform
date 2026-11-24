@@ -6,6 +6,7 @@
 //
 // Run (PowerShell, from the project root):
 //   Get-Content tests\performance\load-test.js | docker run --rm -i -e BASE_URL=http://host.docker.internal:3000 grafana/k6 run -
+/* global __ENV */
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 

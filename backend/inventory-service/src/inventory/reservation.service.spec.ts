@@ -34,7 +34,7 @@ describe('ReservationService', () => {
     });
 
     it('fails with DELIVERY_SLOT_FULL when the slot has no capacity left', async () => {
-      tx.$executeRaw.mockResolvedValueOnce(0);
+      tx.$executeRaw.mockResolvedValue(0);
       await expect(service.reserve(tx, data())).rejects.toBeInstanceOf(InsufficientCapacityError);
       await expect(service.reserve(tx, data())).rejects.toMatchObject({ reason: 'DELIVERY_SLOT_FULL' });
     });
